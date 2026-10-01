@@ -1,0 +1,66 @@
+# Level BT Live
+
+Placar de transmissão para torneios de beach tennis. Um celular marca o
+ponto, o OBS mostra o placar na tela com as animações da marca.
+
+É um produto **separado** do app Level BT: outro repositório, outro
+endereço, outro banco. Os dois não conversam.
+
+```
+index.html     o produto inteiro — controle e overlay no mesmo arquivo
+banco.sql      tudo que o Supabase precisa, para rodar uma vez só
+GUIA-OBS.md    como ligar no OBS
+testes/        node testes/placar.js
+```
+
+## Como o arquivo funciona
+
+Uma página, dois modos, decididos pelo endereço:
+
+| endereço | o que abre |
+|---|---|
+| `index.html` | o painel de controle (celular ou computador) |
+| `index.html?overlay=TOKEN` | a camada transparente 1920×1080 para o OBS |
+| `index.html?overlay=demo` | uma partida fingida, que joga sozinha |
+
+Cada transmissão nasce com duas chaves: o **token**, público, que vai na
+URL do overlay e só lê; e a **chave de controle**, secreta, que fica no
+aparelho de quem marca e só escreve. O OBS nunca consegue alterar o
+placar, e quem marca nunca precisa de login.
+
+## Para pôr de pé
+
+**1.** Crie um projeto novo no Supabase. Não reaproveite o do app.
+
+**2.** No SQL Editor, rode o `banco.sql` inteiro. Depois rode o comando
+do PASSO 2, no fim do arquivo, e guarde a chave de painel que ele
+devolver.
+
+**3.** Em Settings → API, copie a URL e a chave pública (`anon`). Abra o
+`index.html` e troque as duas primeiras linhas da configuração:
+
+```js
+const SUPA_URL='COLE_AQUI_A_URL_DO_PROJETO';
+const SUPA_KEY='COLE_AQUI_A_CHAVE_PUBLICA';
+```
+
+**4.** Publique no GitHub Pages (Settings → Pages → branch `main`).
+
+**5.** Confira abrindo `.../index.html?overlay=demo`. Se a partida
+começar a jogar sozinha, está tudo no lugar.
+
+## Uma coisa sobre a chave pública
+
+A chave `anon` fica visível no código da página. É assim que tem que ser
+— o navegador precisa dela. O que protege os dados é o RLS: as tabelas
+estão trancadas e todo acesso passa por funções que decidem o que cada
+um pode ver. A chave sozinha não abre nada.
+
+A exceção consciente é o balde de logos, que aceita envio sem login.
+O `banco.sql` explica o porquê e o que limita o estrago.
+
+## No dia do torneio
+
+Abra o controle no celular, monte a fila da quadra (ou cole da planilha),
+e use **JOGAR** para trocar de partida. O link do OBS é da quadra, não do
+jogo: ele fica igual do primeiro ao último jogo do dia.

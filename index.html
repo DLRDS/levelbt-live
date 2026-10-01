@@ -1,0 +1,1757 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0D0D0D">
+<title>Level BT Live · Placar de transmissão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --orange:#FF6600; --ink:#0D0D0D; --surf:#1A1A1A; --line:#2A2A2A;
+    --label:#A8A8A8; --dim:#6B6B6B; --white:#FFFFFF; --danger:#FF4D4D;
+    --fd:'Archivo Black',sans-serif; --fb:'Archivo',sans-serif; --fm:'JetBrains Mono',monospace;
+  }
+  body{font-family:var(--fb);background:var(--ink);color:var(--white);font-size:16px;-webkit-font-smoothing:antialiased;}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  input,select{font:inherit;color:inherit;}
+
+  /* ═════════ MODO CONTROLE (celular) ═════════ */
+  .wrap{max-width:520px;margin:0 auto;padding:20px 20px calc(24px + env(safe-area-inset-bottom));padding-top:calc(20px + env(safe-area-inset-top));}
+
+  /* No celular o painel é uma coluna só, como sempre foi. */
+  .painel{display:flex;flex-direction:column;gap:10px;margin-top:14px;}
+  .cln{display:flex;flex-direction:column;gap:10px;}
+
+  /* ═════════ LAYOUT DE COMPUTADOR ═════════
+     Quem opera a transmissão está sentado na frente do OBS, com espaço
+     de sobra. Aqui o painel abre em três colunas e as gavetas ficam
+     abertas: dá para ver o jogo, as cenas e a fila ao mesmo tempo,
+     sem abrir e fechar nada. */
+  @media (min-width:1040px){
+    body{font-size:16px;}
+    .wrap{max-width:1280px;padding-top:28px;}
+    #setup, #linkbox{max-width:560px;margin-left:auto;margin-right:auto;}
+
+    .painel{display:grid;grid-template-columns:1.1fr 1fr 1.15fr;gap:16px;align-items:start;}
+    .cln{background:var(--surf);border-radius:24px;padding:18px;gap:14px;}
+
+    /* as duas duplas lado a lado, como um placar de verdade */
+    .taps{flex-direction:row;}
+    .taps .tap{flex:1;}
+    .tap .big{font-size:56px;}
+
+    /* dentro das colunas, as gavetas viram seções com título */
+    .cln details{background:transparent;border:none;border-radius:0;padding:0;}
+    .cln details+details{border-top:1.5px solid var(--line);padding-top:14px;}
+    .cln summary{list-style:none;cursor:default;pointer-events:none;
+      font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.16em;
+      text-transform:uppercase;color:var(--label);margin-bottom:12px;}
+    .cln summary::-webkit-details-marker{display:none;}
+    /* a de colar planilha continua sendo uma gaveta de verdade */
+    .cln details details summary{pointer-events:auto;cursor:pointer;color:var(--orange);}
+
+    .agdLista, #agdLista{max-height:340px;overflow-y:auto;}
+    .cenas{grid-template-columns:1fr 1fr;}
+  }
+
+  /* Atalhos de teclado, mostrados só quando há teclado de verdade */
+  .tecla{display:none;}
+  @media (min-width:1040px){
+    .tecla{display:inline-block;font-family:var(--fm);font-size:10px;font-weight:700;
+      letter-spacing:.1em;border:1.5px solid var(--line);border-radius:6px;
+      padding:2px 6px;color:var(--dim);margin-left:8px;vertical-align:middle;}
+  }
+  .lock{display:flex;align-items:center;gap:9px;margin-bottom:20px;}
+  .marca{background:none;border:none;padding:0;margin-bottom:20px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .marca:active{transform:scale(.96);}
+  .marca:focus-visible{outline:2px solid var(--orange);outline-offset:4px;border-radius:8px;}
+  .meter{display:flex;align-items:flex-end;gap:3px;height:20px;}
+  .meter i{width:5px;border-radius:999px;background:var(--line);display:block;}
+  .meter i.on{background:var(--orange);}
+  .lock-word{font-family:var(--fd);font-size:19px;letter-spacing:-.03em;}
+  .lock-word b{color:var(--orange);font-weight:inherit;}
+  .h1{font-family:var(--fd);font-size:28px;letter-spacing:-.03em;line-height:1.1;}
+  .mono{font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--label);}
+  .body-sm{font-size:14px;color:var(--label);}
+  .card{background:var(--surf);border-radius:20px;padding:16px;}
+  .panel{background:var(--surf);border-radius:24px;padding:20px;}
+  .stack{display:flex;flex-direction:column;gap:12px;}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .field{display:flex;flex-direction:column;gap:8px;}
+  .field>label{font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--label);}
+  textarea.input{font-family:var(--fm);font-size:14px;line-height:1.6;resize:vertical;}
+  .input{background:var(--surf);border:1.5px solid var(--line);border-radius:16px;padding:14px 16px;font-size:16px;color:var(--white);width:100%;outline:none;}
+  .input:focus{border-color:var(--orange);}
+  .input::placeholder{color:var(--dim);}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:16px 22px;font-size:16px;font-weight:700;}
+  .btn:active{transform:scale(.97);} .btn:disabled{opacity:.4;}
+  .btn-p{background:var(--orange);color:var(--ink);}
+  .btn-q{border:1.75px solid var(--line);color:var(--white);font-weight:600;padding:14px 20px;}
+  .btn-full{width:100%;}
+  .seg{display:flex;background:var(--surf);border-radius:999px;padding:5px;gap:6px;}
+  .seg button{flex:1;border-radius:999px;padding:10px;font-family:var(--fd);font-size:16px;color:var(--label);}
+  .seg button.on{background:var(--white);color:var(--ink);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  /* fila de jogos */
+  .agrow{background:var(--surf);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px;}
+  .agrow .qd{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px;}
+  .agrow .cab{font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--label);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .agrow .du{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .agrow .jg{flex:none;background:var(--orange);color:var(--ink);border-radius:999px;padding:8px 14px;
+    font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.12em;}
+  .agrow .x{flex:none;color:var(--danger);font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.12em;padding:6px;}
+  .agrow.pronto .du{color:var(--dim);}
+  .agrow .res{flex:none;font-family:var(--fm);font-size:13px;color:var(--orange);}
+  .hidden{display:none !important;}
+  .tap{background:var(--surf);border-radius:20px;padding:20px;text-align:left;width:100%;}
+  .tap.lead{border:1.5px solid var(--orange);}
+  .big{font-family:var(--fd);font-size:64px;line-height:.85;letter-spacing:-.04em;}
+  .srvgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .srvb{background:var(--surf);border:1.5px solid var(--line);border-radius:14px;padding:12px;
+    font-size:15px;font-weight:600;color:var(--label);text-align:center;}
+  .srvb.on{border-color:var(--orange);color:var(--orange);}
+  .adj{display:flex;align-items:center;gap:8px;}
+  .adjb{width:44px;height:44px;border-radius:999px;border:1.5px solid var(--line);
+    font-family:var(--fd);font-size:20px;color:var(--white);display:flex;align-items:center;justify-content:center;}
+  .adjb:active{border-color:var(--orange);color:var(--orange);}
+  .cenas{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .cenab{background:var(--surf);border:1.5px solid var(--line);border-radius:14px;padding:13px;
+    font-family:var(--fm);font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--label);text-align:center;}
+  .cenab.on{background:var(--orange);border-color:var(--orange);color:var(--ink);}
+  details{background:var(--surf);border-radius:16px;padding:14px 16px;}
+  summary{font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--label);cursor:pointer;}
+  details[open] summary{margin-bottom:14px;}
+  .warn{background:rgba(255,102,0,.12);border:1.5px solid var(--orange);border-radius:16px;padding:14px 16px;font-size:14px;}
+
+  /* ═════════ MODO OVERLAY (OBS · 1920×1080) ═════════ */
+  body.ov{background:transparent;overflow:hidden;}
+  /* Palco fixo de 1920×1080. Tudo dentro é medido em pixels de Full HD;
+     o escalar() só encolhe o conjunto inteiro para caber na janela, então
+     a proporção nunca muda. No OBS, com fonte 1920×1080, a escala é 1:1. */
+  .stage{position:fixed;left:0;top:0;width:1920px;height:1080px;transform-origin:top left;--esc:.78;
+    --pulso:1.7s; --curva:cubic-bezier(.45,0,.55,1);}
+  .ov *{font-kerning:none;}
+
+  /* Cada peça mora numa âncora. A âncora é que encolhe (--esc), com a
+     origem no canto a que ela pertence — assim mudar o tamanho não
+     desgruda nada da borda da tela. O elemento de dentro fica livre
+     para usar transform nas animações, sem brigar com a escala. */
+  .anc{position:absolute;transform:scale(var(--esc));}
+  .anc.tl{transform-origin:top left;}
+  .anc.tr{transform-origin:top right;}
+  .anc.bl{transform-origin:bottom left;}
+  .anc.br{transform-origin:bottom right;}
+
+  /* ═════════ ANIMAÇÕES · vocabulário do design ═════════ */
+  /* entrada */
+  @keyframes bugIn{from{transform:translateX(-40px);opacity:0}to{transform:none;opacity:1}}
+  @keyframes faixaIn{from{transform:translateY(36px);opacity:0}to{transform:none;opacity:1}}
+  @keyframes cartaoIn{from{transform:translateY(48px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+  /* O design anima o letter-spacing na entrada do selo. Isso recalcula o
+     layout do texto a cada quadro — em corpo 128px trava visivelmente.
+     Mesmo efeito de "abrir", feito só com transform e opacidade, que o
+     navegador resolve na placa de vídeo. */
+  @keyframes seloIn{
+    0%{transform:scale(1.28);opacity:0}
+    55%{transform:scale(.985);opacity:1}
+    100%{transform:none;opacity:1}}
+  @keyframes regraIn{from{transform:scaleX(0)}to{transform:none}}
+  /* saída */
+  @keyframes bugOut{from{transform:none;opacity:1}to{transform:translateX(-40px);opacity:0}}
+  @keyframes faixaOut{from{transform:none;opacity:1}to{transform:translateY(36px);opacity:0}}
+  @keyframes cartaoOut{from{transform:none;opacity:1}to{transform:translateY(-40px) scale(.97);opacity:0}}
+  @keyframes seloOut{from{transform:none;opacity:1}to{transform:scale(.86);opacity:0}}
+  /* troca de valor */
+  @keyframes numFlip{0%{transform:translateY(18px) scale(.9);opacity:0}100%{transform:none;opacity:1}}
+  @keyframes celaFlash{0%{background:var(--orange);color:var(--ink)}100%{background:var(--surf);color:var(--orange)}}
+  @keyframes celaFlashG{0%{background:var(--orange);color:var(--ink)}100%{background:var(--surf);color:var(--white)}}
+  /* contínuas */
+  @keyframes vivoPisca{0%,100%{opacity:1}50%{opacity:.25}}
+  /* Pulso do quarentão. O fundo é uma camada laranja que só muda de
+     opacidade — a placa de vídeo dá conta sozinha, sem repintar a cela.
+     Fundo, texto e anel usam a MESMA duração e a mesma curva, então
+     pulsam juntos em vez de brigar entre si. */
+  @keyframes ouroFundo{0%,100%{opacity:0}50%{opacity:1}}
+  @keyframes ouroTexto{0%,100%{color:var(--orange)}50%{color:var(--ink)}}
+  @keyframes anelPulsa{0%,100%{opacity:.2}50%{opacity:1}}
+  @keyframes replayVarre{0%{transform:translateY(-102%)}30%{transform:none}66%{transform:none}100%{transform:translateY(102%)}}
+  @keyframes fadeIn{to{opacity:1}}
+  @keyframes fadeOut{to{opacity:0}}
+
+  /* — SCOREBUG — */
+  .bug{display:flex;gap:3px;align-items:stretch;
+    animation:bugIn .5s cubic-bezier(.2,.8,.2,1) .1s both;}
+  .bug.out{animation:bugOut .35s ease forwards;}
+
+  .mk{background:var(--ink);padding:20px 22px;display:flex;flex-direction:column;gap:12px;justify-content:center;}
+  .mk .meter{height:26px;gap:4px;}
+  .mk .meter i{width:7px;}
+  .mk .wm{font-family:var(--fd);font-size:24px;letter-spacing:-.03em;color:var(--white);}
+  .mk .wm b{color:var(--orange);font-weight:inherit;}
+
+  .nms{background:var(--surf);width:560px;display:flex;flex-direction:column;gap:3px;}
+  .nrow{padding:16px 26px;display:flex;align-items:center;gap:20px;background:var(--surf);flex:1;}
+  .dot{width:16px;height:16px;border-radius:999px;background:var(--line);flex-shrink:0;transition:background .2s,box-shadow .2s;}
+  .nrow.srv .dot{background:var(--orange);box-shadow:0 0 16px rgba(255,102,0,.85);}
+  .nnm{font-family:var(--fd);font-size:38px;letter-spacing:-.02em;color:var(--white);flex:1;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .setbox{display:flex;gap:10px;}
+  .setbox span{width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+    font-family:var(--fm);font-size:24px;background:var(--line);color:var(--label);}
+  .setbox span.won{background:var(--orange);color:var(--ink);font-weight:700;}
+  .setbox span.lost{background:var(--line);color:var(--white);font-weight:700;}
+
+  .col{display:flex;flex-direction:column;gap:3px;}
+  .gm{background:var(--surf);width:92px;flex:1;display:flex;align-items:center;justify-content:center;
+    font-family:var(--fd);font-size:40px;letter-spacing:-.03em;color:var(--white);}
+  .ptcol{position:relative;}
+  .pt{background:var(--surf);width:132px;flex:1;display:flex;align-items:center;justify-content:center;
+    font-family:var(--fd);font-size:46px;letter-spacing:-.04em;color:var(--orange);}
+  .gm span,.pt span{display:block;}
+
+  /* marcador de quem saca */
+  .ptmark{position:absolute;left:0;right:0;height:calc(50% - 1.5px);border:3px solid var(--orange);
+    pointer-events:none;transition:top .25s cubic-bezier(.3,1,.4,1);z-index:2;}
+
+  /* troca de valor: a cela pisca, o número sobe */
+  .flip{animation:numFlip .34s cubic-bezier(.2,.8,.2,1);}
+  .pt.flash{animation:celaFlash .5s ease-out;}
+  .gm.flash{animation:celaFlashG .5s ease-out;}
+
+  /* ponto de ouro (quarentão): anel pulsando + celas invertendo */
+  .pt{position:relative;}
+  .pt::after{content:'';position:absolute;inset:0;background:var(--orange);opacity:0;z-index:0;}
+  .pt span{position:relative;z-index:1;}
+  .anel{position:absolute;inset:-6px;border:3px solid var(--orange);pointer-events:none;
+    display:none;z-index:1;}
+  .ptcol.ouro .anel{display:block;will-change:opacity;
+    animation:anelPulsa var(--pulso) var(--curva) infinite;}
+  .ptcol.ouro .pt::after{will-change:opacity;animation:ouroFundo var(--pulso) var(--curva) infinite;}
+  .ptcol.ouro .pt span{animation:ouroTexto var(--pulso) var(--curva) infinite;}
+
+  /* — PÍLULAS ABAIXO DO BUG — */
+  .pills{display:flex;gap:10px;
+    animation:faixaIn .5s cubic-bezier(.2,.8,.2,1) .25s both;}
+  .pl{padding:10px 16px;font-family:var(--fm);font-size:24px;letter-spacing:.14em;display:flex;align-items:center;gap:9px;}
+  .pl-live{background:var(--orange);color:var(--ink);font-weight:700;}
+  .pl-live i{width:10px;height:10px;border-radius:999px;background:var(--ink);display:block;
+    animation:vivoPisca 1.4s steps(2,jump-none) infinite;}
+  .pl-dark{background:var(--ink);color:var(--white);}
+  /* o quarentão é uma tarja discreta logo abaixo do placar, não um selo de tela cheia */
+  .pl-ouro{background:var(--ink);color:var(--orange);font-weight:700;letter-spacing:.16em;
+    animation:faixaIn .38s cubic-bezier(.2,.8,.2,1);}
+  .pills.out{animation:faixaOut .35s ease forwards;}
+
+  /* — RODAPÉ DE SETS — */
+  .setline{background:var(--ink);padding:14px 20px;
+    font-family:var(--fm);font-size:24px;letter-spacing:.14em;color:var(--label);
+    animation:faixaIn .5s cubic-bezier(.2,.8,.2,1) .35s both;}
+  .setline.out{animation:faixaOut .35s ease forwards;}
+
+  /* — SELO DE TENSÃO (direita) — */
+  .tens{display:flex;flex-direction:column;align-items:flex-end;
+    opacity:0;pointer-events:none;}
+  .tens.show{animation:seloIn .55s cubic-bezier(.2,.8,.2,1) forwards;}
+  .tens.hide{animation:seloOut .3s ease forwards;}
+  .tens .big{background:var(--orange);padding:22px 34px 26px;font-family:var(--fd);font-size:128px;
+    line-height:.86;letter-spacing:-.05em;color:var(--ink);text-align:right;}
+  .tens .sub{background:var(--ink);padding:16px 24px;font-family:var(--fm);font-size:30px;font-weight:700;
+    letter-spacing:.18em;color:var(--white);}
+
+  /* — QUEBRA DE SAQUE (canto inferior esquerdo) — */
+  .brk{display:flex;flex-direction:column;gap:3px;align-items:flex-start;
+    opacity:0;pointer-events:none;}
+  .brk.show{animation:faixaIn .45s cubic-bezier(.2,.8,.2,1) forwards;}
+  .brk.hide{animation:faixaOut .35s ease forwards;}
+  .brk .w1{background:var(--ink);padding:18px 24px;font-family:var(--fd);font-size:44px;letter-spacing:-.03em;color:var(--orange);}
+  .brk .w2{background:var(--ink);padding:22px 24px;font-family:var(--fm);font-size:28px;letter-spacing:.16em;color:var(--label);}
+
+  /* — CARTELA DE ABERTURA DA PARTIDA — */
+  .ident{display:flex;flex-direction:column;align-items:flex-start;
+    opacity:0;}
+  .ident.show{animation:faixaIn .55s cubic-bezier(.2,.8,.2,1) forwards;}
+  .ident.hide{animation:faixaOut .4s ease forwards;}
+  .ident .torn{background:var(--orange);padding:12px 22px;font-family:var(--fm);font-size:26px;font-weight:700;letter-spacing:.2em;color:var(--ink);}
+  .ident .box{background:var(--ink);padding:24px 28px 26px;display:flex;flex-direction:column;gap:16px;}
+  .ident .cat{font-family:var(--fd);font-size:84px;line-height:.9;letter-spacing:-.04em;color:var(--white);}
+  .ident .fase{font-family:var(--fd);font-size:56px;line-height:.9;letter-spacing:-.03em;color:var(--orange);}
+  .ident .bar{background:var(--orange);height:4px;transform-origin:left;}
+  .ident.show .bar{animation:regraIn .5s cubic-bezier(.2,.8,.2,1) .1s both;}
+  .ident .meta{font-family:var(--fm);font-size:26px;letter-spacing:.16em;color:var(--label);display:flex;gap:24px;}
+  .brandTR{background:var(--ink);padding:16px 22px;display:flex;align-items:center;gap:16px;}
+
+  /* — REPLAY — */
+  .rep{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;}
+  .rep.show{animation:fadeIn .12s ease forwards;}
+  .rep.hide{animation:fadeOut .3s ease forwards;}
+  /* cortina: o medidor de nível varrendo a tela de cima a baixo */
+  .rep .bars{position:absolute;inset:0;display:flex;gap:6px;padding:0 6px;overflow:hidden;z-index:1;}
+  .rep .bars i{flex:1;background:var(--orange);border-radius:999px 999px 0 0;display:block;
+    animation:replayVarre 2.6s cubic-bezier(.16,1,.3,1) both;}
+  .rep .bars i:last-child{background:var(--ink);}
+  .rep .bars i:nth-child(2){animation-delay:.08s} .rep .bars i:nth-child(3){animation-delay:.16s}
+  .rep .bars i:nth-child(4){animation-delay:.24s} .rep .bars i:nth-child(5){animation-delay:.32s}
+  /* a palavra fica ACIMA da cortina, e tem entrada e saída próprias:
+     aparece com a tela já coberta e sai antes de a cortina abrir */
+  .rep .box{background:var(--ink);padding:30px 44px;display:flex;align-items:center;gap:28px;
+    position:relative;z-index:2;}
+  .rep.show .box{animation:repPalavra 2.6s cubic-bezier(.2,.8,.2,1) both;}
+  @keyframes repPalavra{
+    0%,14%  {opacity:0;transform:scale(1.22)}
+    30%,60% {opacity:1;transform:none}
+    80%,100%{opacity:0;transform:scale(.93)}
+  }
+  .rep .mtr{display:flex;align-items:flex-end;gap:8px;height:62px;}
+  .rep .mtr i{width:16px;border-radius:999px;background:var(--orange);display:block;}
+  .rep .mtr i:last-child{background:var(--line);}
+  .rep .w{font-family:var(--fd);font-size:96px;line-height:.9;letter-spacing:-.045em;color:var(--white);}
+
+
+  /* — AGENDA · resultados e próximos jogos — */
+  .agdw{position:absolute;inset:0;background:rgba(13,13,13,.66);opacity:0;pointer-events:none;}
+  .agdw.show{animation:fadeIn .4s ease forwards;}
+  .agdw.hide{animation:fadeOut .35s ease forwards;}
+  .agd{position:absolute;left:64px;right:64px;top:110px;display:flex;flex-direction:column;gap:26px;}
+  .agdw.show .agd{animation:cartaoIn .6s cubic-bezier(.2,.8,.2,1) .1s both;}
+  .agd .hd{display:flex;align-items:center;gap:18px;}
+  .agd .hd .tag{background:var(--orange);padding:12px 22px;font-family:var(--fm);font-size:28px;
+    font-weight:700;letter-spacing:.2em;color:var(--ink);}
+  .agd .hd .tn{font-family:var(--fm);font-size:26px;letter-spacing:.16em;color:var(--white);}
+  .agd .cols{display:flex;gap:24px;align-items:flex-start;}
+  .agd .cl{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;}
+  .agd .ct{font-family:var(--fm);font-size:26px;letter-spacing:.18em;color:var(--label);}
+  .agd .ct.on{color:var(--orange);}
+  .agd .it{background:var(--ink);padding:18px 22px;display:flex;flex-direction:column;gap:10px;}
+  .agd .it.now{border:3px solid var(--orange);padding:21px 22px;}
+  .agd .top{display:flex;align-items:center;justify-content:space-between;gap:18px;}
+  .agd .hr{font-family:var(--fd);font-size:30px;letter-spacing:-.03em;color:var(--white);}
+  .agd .it.now .hr{color:var(--orange);}
+  .agd .cx{font-family:var(--fm);font-size:23px;letter-spacing:.16em;color:var(--label);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .agd .ln{display:flex;align-items:center;justify-content:space-between;gap:18px;}
+  .agd .du{font-family:var(--fd);font-size:30px;letter-spacing:-.02em;color:var(--white);
+    text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
+  .agd .du.venceu{color:var(--orange);}
+  .agd .du.perdeu{color:var(--dim);}
+  .agd .sc{font-family:var(--fm);font-size:25px;color:var(--white);white-space:nowrap;}
+  .agd .sc.perdeu{color:var(--dim);}
+  .agd .rule{height:2px;background:var(--line);}
+  .agd .vaz{font-family:var(--fm);font-size:24px;letter-spacing:.16em;color:var(--dim);padding:16px 0;}
+
+  /* — SELO DE PATROCÍNIO NO CANTO (fica durante o jogo) — */
+  .apo{display:flex;align-items:stretch;gap:3px;}
+  .apo .rot{background:var(--ink);padding:14px 18px;display:flex;align-items:center;
+    font-family:var(--fm);font-size:24px;letter-spacing:.16em;color:var(--label);white-space:nowrap;}
+  .apo .marca{background:var(--white);padding:12px 22px;display:flex;align-items:center;justify-content:center;
+    min-width:160px;}
+  .apo .marca img{height:44px;max-width:220px;object-fit:contain;display:block;}
+  .apo .marca .txt{font-family:var(--fd);font-size:30px;letter-spacing:-.03em;color:var(--ink);white-space:nowrap;}
+  .apo.troca{animation:apoTroca .5s cubic-bezier(.2,.8,.2,1);}
+  .apo.out{animation:faixaOut .35s ease forwards;}
+  @keyframes apoTroca{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:none}}
+
+  /* — PATROCÍNIO — */
+  .spo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(13,13,13,.72);opacity:0;pointer-events:none;}
+  .spo.show{animation:fadeIn .45s ease forwards;}
+  .spo.hide{animation:fadeOut .35s ease forwards;}
+  .spo.show .box{animation:cartaoIn .55s cubic-bezier(.2,.8,.2,1) .1s both;}
+  .spo .box{background:var(--ink);padding:40px 36px;display:flex;flex-direction:column;gap:30px;max-width:1200px;}
+  .spo .lb{font-family:var(--fm);font-size:28px;font-weight:700;letter-spacing:.2em;color:var(--orange);}
+  .spo .nm{font-family:var(--fd);font-size:64px;line-height:.95;letter-spacing:-.04em;color:var(--white);}
+  .spo .marcas{display:flex;flex-wrap:wrap;gap:3px;}
+  .spo .marcas .m{background:var(--white);padding:18px 26px;display:flex;align-items:center;justify-content:center;min-width:200px;}
+  .spo .marcas .m img{height:76px;max-width:280px;object-fit:contain;display:block;}
+  .spo .marcas .m .txt{font-family:var(--fd);font-size:34px;letter-spacing:-.03em;color:var(--ink);}
+  .spo .ft{display:flex;align-items:center;gap:16px;}
+  .spo .ft .wm{font-family:var(--fd);font-size:24px;letter-spacing:-.03em;color:var(--white);}
+  .spo .ft .wm b{color:var(--orange);font-weight:inherit;}
+  .spo .ft .tn{font-family:var(--fm);font-size:24px;letter-spacing:.16em;color:var(--label);}
+
+  /* — FIM DE JOGO — */
+  .veil{position:absolute;inset:0;background:rgba(13,13,13,.6);opacity:0;}
+  .fim{position:absolute;left:64px;right:64px;top:140px;display:flex;flex-direction:column;gap:26px;opacity:0;}
+  .veil.show{animation:fadeIn .5s ease forwards;}
+  .fim.show{animation:cartaoIn .6s cubic-bezier(.2,.8,.2,1) .12s forwards;}
+  .fim.hide{animation:cartaoOut .4s ease forwards;}
+  .veil.hide{animation:fadeOut .4s ease forwards;}
+  .fim .hd{display:flex;align-items:center;gap:18px;}
+  .fim .hd .tag{background:var(--orange);padding:12px 22px;font-family:var(--fm);font-size:28px;font-weight:700;letter-spacing:.2em;color:var(--ink);}
+  .fim .hd .ctx{font-family:var(--fm);font-size:26px;letter-spacing:.16em;color:var(--white);}
+  .fim .box{background:var(--ink);padding:34px 34px 36px;display:flex;flex-direction:column;gap:24px;}
+  .fim .ln{display:flex;align-items:center;gap:28px;}
+  .fim .who{font-family:var(--fd);font-size:88px;line-height:.92;letter-spacing:-.045em;flex:1;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fim .ln.win .who{color:var(--white);} .fim .ln.lose .who{color:var(--label);}
+  .fim .sets{display:flex;gap:10px;}
+  .fim .sets span{width:108px;height:108px;display:flex;align-items:center;justify-content:center;
+    font-family:var(--fd);font-size:64px;letter-spacing:-.04em;background:var(--line);color:var(--white);}
+  .fim .sets span.w{background:var(--orange);color:var(--ink);}
+  .fim .vc{background:var(--orange);padding:10px 18px;font-family:var(--fm);font-size:26px;font-weight:700;letter-spacing:.16em;color:var(--ink);}
+  .fim .vd{padding:10px 18px;font-family:var(--fm);font-size:26px;letter-spacing:.16em;color:var(--dim);}
+  .fim .rule{background:var(--line);height:3px;}
+  .fim .ft{font-family:var(--fm);font-size:26px;letter-spacing:.16em;color:var(--white);display:flex;gap:16px;}
+  .fim .ft b{color:var(--orange);font-weight:400;}
+</style>
+</head>
+<body>
+
+<!-- ════════ OVERLAY (OBS) ════════ -->
+<div class="stage hidden" id="stage">
+  <div class="veil" id="ovVeil"></div>
+
+  <div class="anc tl" style="left:64px;top:56px">
+  <div class="bug" id="bug">
+      <div class="mk">
+        <div class="meter" aria-hidden="true"><i class="on" style="height:11px"></i><i class="on" style="height:17px"></i><i class="on" style="height:22px"></i><i style="height:26px"></i></div>
+        <div class="wm">LEVEL<b>BT</b></div>
+      </div>
+      <div class="nms">
+        <div class="nrow" id="ovR1"><span class="dot"></span><div class="nnm" id="ovN1">—</div><div class="setbox" id="ovB1"></div></div>
+        <div class="nrow" id="ovR2"><span class="dot"></span><div class="nnm" id="ovN2">—</div><div class="setbox" id="ovB2"></div></div>
+      </div>
+      <div class="col"><div class="gm" id="ovG1"><span>0</span></div><div class="gm" id="ovG2"><span>0</span></div></div>
+      <div class="col ptcol" id="ovPtcol">
+        <div class="anel"></div>
+        <div class="ptmark" id="ovMark" style="top:0"></div>
+        <div class="pt" id="ovP1"><span>0</span></div><div class="pt" id="ovP2"><span>0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="anc tl" style="left:64px;top:216px">
+  <div class="pills" id="ovPills">
+      <span class="pl pl-live"><i></i>AO VIVO</span>
+      <span class="pl pl-dark" id="ovCtx"></span>
+      <span class="pl pl-dark" id="ovTempo">0:00</span>
+      <span class="pl pl-ouro hidden" id="ovOuro">QUARENTÃO · QUEM FAZ, LEVA</span>
+    </div>
+  </div>
+  <div class="anc bl" style="left:64px;bottom:56px">
+  <div class="setline" id="ovSetline"></div>
+  </div>
+
+  <div class="anc br" style="right:64px;bottom:56px">
+    <div class="apo hidden" id="ovApo"></div>
+  </div>
+
+  <div class="anc tr" style="right:64px;top:300px">
+  <div class="tens" id="ovTens"><div class="big" id="ovTensBig"></div><div class="sub" id="ovTensSub"></div></div>
+  </div>
+
+  <div class="anc bl" style="left:64px;bottom:96px">
+  <div class="brk" id="ovBrk"><div class="w1">QUEBROU</div><div class="w2" id="ovBrkSub"></div></div>
+  </div>
+
+  <div class="anc bl" style="left:64px;bottom:96px">
+  <div class="ident" id="ovIdent">
+      <div class="torn" id="idTorn"></div>
+      <div class="box">
+        <div class="cat" id="idCat"></div>
+        <div class="fase" id="idFase"></div>
+        <div class="bar"></div>
+        <div class="meta" id="idMeta"></div>
+      </div>
+    </div>
+  </div>
+  <div class="anc tr" style="right:64px;top:56px">
+    <div class="brandTR hidden" id="ovBrandTR">
+      <div class="meter" aria-hidden="true"><i class="on" style="height:11px"></i><i class="on" style="height:17px"></i><i class="on" style="height:22px"></i><i style="height:26px"></i></div>
+      <div style="font-family:var(--fd);font-size:24px;letter-spacing:-.03em">LEVEL<span style="color:var(--orange)">BT</span></div>
+    </div>
+  </div>
+
+  <div class="rep" id="ovRep">
+    <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="box">
+      <div class="mtr"><i style="height:26px"></i><i style="height:38px"></i><i style="height:50px"></i><i style="height:62px"></i></div>
+      <div class="w">REPLAY</div>
+    </div>
+  </div>
+
+  <div class="spo" id="ovSpo">
+    <div class="box">
+      <div class="lb">APRESENTADO POR</div>
+      <div class="nm" id="spoNome">—</div>
+      <div class="marcas hidden" id="spoMarcas"></div>
+      <div class="ft">
+        <div class="meter" style="height:26px;gap:4px"><i class="on" style="width:7px;height:11px"></i><i class="on" style="width:7px;height:17px"></i><i class="on" style="width:7px;height:22px"></i><i style="width:7px;height:26px"></i></div>
+        <div class="wm">LEVEL<b>BT</b></div>
+        <div class="tn" id="spoTorn"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="agdw" id="ovAgd">
+    <div class="agd">
+      <div class="hd"><div class="tag">PRÓXIMOS JOGOS</div><div class="tn" id="agdTorn"></div></div>
+      <div class="cols">
+        <div class="cl"><div class="ct">JÁ JOGADOS</div><div id="agdFeitos" class="cl"></div></div>
+        <div class="cl"><div class="ct on">A SEGUIR</div><div id="agdProx" class="cl"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fim" id="ovFim">
+    <div class="hd"><span class="tag">FIM DE JOGO</span><span class="ctx" id="fCtx"></span></div>
+    <div class="box">
+      <div class="ln win"><div class="who" id="fW1"></div><div class="sets" id="fS1"></div><span class="vc">VENCEU</span></div>
+      <div class="rule"></div>
+      <div class="ln lose"><div class="who" id="fW2"></div><div class="sets" id="fS2"></div><span class="vd">—</span></div>
+    </div>
+    <div class="ft" id="fFt"></div>
+  </div>
+</div>
+
+<!-- ════════ CONTROLE (celular) ════════ -->
+<div class="wrap hidden" id="ctrl">
+  <div class="row" style="margin-bottom:4px">
+    <button class="lock marca" id="btnInicio" title="Ir para o app Level BT" aria-label="Ir para o app Level BT">
+      <div class="meter" aria-hidden="true"><i class="on" style="height:9px"></i><i class="on" style="height:13px"></i><i class="on" style="height:17px"></i><i style="height:20px"></i></div>
+      <div class="lock-word">LEVEL<b>BT</b></div>
+    </button>
+    <button class="btn btn-q hidden" id="btnVoltar" style="padding:9px 16px;font-size:14px">Voltar</button>
+  </div>
+
+  <!-- SETUP -->
+  <div id="setup">
+    <div class="h1" style="margin-bottom:8px">PLACAR DE<br>TRANSMISSÃO</div>
+    <div class="body-sm" style="margin-bottom:22px">Monta a partida, marca o ponto no celular e o placar aparece no OBS.</div>
+    <div class="stack">
+      <div class="panel stack" style="gap:14px">
+        <div class="mono">Dupla 1</div>
+        <input class="input" id="a1" placeholder="Jogador 1" maxlength="18">
+        <input class="input" id="a2" placeholder="Jogador 2" maxlength="18">
+      </div>
+      <div class="panel stack" style="gap:14px">
+        <div class="mono">Dupla 2</div>
+        <input class="input" id="b1" placeholder="Jogador 3" maxlength="18">
+        <input class="input" id="b2" placeholder="Jogador 4" maxlength="18">
+      </div>
+      <div class="panel stack" style="gap:14px">
+        <div class="mono">Partida</div>
+        <div class="field"><label>Torneio</label><input class="input" id="torneio" placeholder="Ex.: Copa Verão" maxlength="26"></div>
+        <div class="field"><label>Categoria</label><input class="input" id="cat" placeholder="Ex.: Mista B" maxlength="18"></div>
+        <div class="field"><label>Fase</label><input class="input" id="fase" placeholder="Ex.: Quartas de final" maxlength="22"></div>
+        <div class="field"><label>Quadra</label><input class="input" id="quadra" placeholder="Ex.: Quadra 2" maxlength="16"></div>
+        <div class="field"><label>Patrocinador (opcional)</label><input class="input" id="patroc" placeholder="Ex.: Arena Beach" maxlength="30"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Games</label><div class="seg" id="segGames"></div></div>
+        <div class="field"><label>Tiebreak</label><div class="seg" id="segTb"></div></div>
+      </div>
+      <div class="field"><label>Sets</label><div class="seg" id="segSets"></div></div>
+      <div class="warn" id="setupMsg" style="display:none"></div>
+      <button class="btn btn-p btn-full" id="btnStart">Gerar placar e link do OBS</button>
+      <button class="btn btn-q btn-full" id="btnDemo">Ver demonstração do overlay</button>
+    </div>
+  </div>
+
+  <!-- LINK -->
+  <div id="linkbox" class="hidden">
+    <div class="panel stack" style="gap:14px;margin-bottom:12px">
+      <div class="mono">Link do overlay · cole no OBS</div>
+      <input class="input" id="ovUrl" readonly style="font-family:var(--fm);font-size:13px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-p" style="padding:12px 18px;font-size:15px" id="btnCopy">Copiar link</button>
+        <button class="btn btn-q" style="padding:11px 18px;font-size:15px" id="btnOpen">Abrir</button>
+      </div>
+      <div class="body-sm">No OBS: <b>+ → Navegador</b>, cola a URL, largura <b>1920</b>, altura <b>1080</b>.</div>
+    </div>
+  </div>
+
+  <!-- MARCADOR -->
+  <div id="live" class="hidden">
+    <div class="row" style="margin-bottom:12px">
+      <div class="mono"><span id="liveMeta"></span> <span id="liveTempo" style="color:var(--white)"></span></div>
+      <div class="mono" id="liveState" style="color:var(--orange)"></div>
+    </div>
+    <div class="painel">
+    <div class="cln">
+    <div class="stack taps" style="gap:8px">
+      <button class="tap" id="tap1">
+        <div class="row"><div style="font-size:19px;font-weight:700" id="lb1">—</div><div class="big" id="lp1">0</div></div>
+        <div class="row" style="margin-top:8px"><div class="mono"><span id="lg1">SETS 0 · GAMES 0</span><span class="tecla">A</span></div><div class="mono" id="ls1"></div></div>
+      </button>
+      <button class="tap" id="tap2">
+        <div class="row"><div style="font-size:19px;font-weight:700" id="lb2">—</div><div class="big" id="lp2">0</div></div>
+        <div class="row" style="margin-top:8px"><div class="mono"><span id="lg2">SETS 0 · GAMES 0</span><span class="tecla">L</span></div><div class="mono" id="ls2"></div></div>
+      </button>
+    </div>
+      <button class="btn btn-q btn-full" id="btnUndo">Desfazer último ponto<span class="tecla">Z</span></button>
+
+      <details>
+        <summary>Corrigir placar</summary>
+        <div class="stack" style="gap:14px">
+          <div class="row"><div class="body-sm" id="ajN1">Dupla 1</div>
+            <div class="adj"><button class="adjb" data-a="p1-">−</button><span class="mono" style="width:54px;text-align:center">PONTO</span><button class="adjb" data-a="p1+">+</button></div></div>
+          <div class="row"><div class="body-sm">&nbsp;</div>
+            <div class="adj"><button class="adjb" data-a="g1-">−</button><span class="mono" style="width:54px;text-align:center">GAME</span><button class="adjb" data-a="g1+">+</button></div></div>
+          <div style="height:1px;background:var(--line)"></div>
+          <div class="row"><div class="body-sm" id="ajN2">Dupla 2</div>
+            <div class="adj"><button class="adjb" data-a="p2-">−</button><span class="mono" style="width:54px;text-align:center">PONTO</span><button class="adjb" data-a="p2+">+</button></div></div>
+          <div class="row"><div class="body-sm">&nbsp;</div>
+            <div class="adj"><button class="adjb" data-a="g2-">−</button><span class="mono" style="width:54px;text-align:center">GAME</span><button class="adjb" data-a="g2+">+</button></div></div>
+          <div class="row"><div class="body-sm">Sets</div>
+            <div class="adj"><button class="adjb" data-a="s1-">−</button><span class="mono" style="width:54px;text-align:center" id="ajSets">0-0</span><button class="adjb" data-a="s2+">+</button></div></div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Quem está sacando</summary>
+        <div class="srvgrid" id="srvgrid"></div>
+      </details>
+    </div>
+
+    <div class="cln">
+      <div class="stack" style="gap:10px">
+        <div class="row"><div class="mono">Tamanho do placar</div><div class="mono" id="escVal"></div></div>
+        <div class="seg" id="segEsc"></div>
+      </div>
+
+      <div class="stack" style="gap:10px">
+        <div class="mono">O que aparece na transmissão</div>
+        <div class="cenas" id="cenas">
+          <button class="cenab" data-c="placar">PLACAR<span class="tecla">P</span></button>
+          <button class="cenab" data-c="cartela">CARTELA</button>
+          <button class="cenab" data-c="agenda">PRÓXIMOS</button>
+          <button class="cenab" data-c="patroc">PATROCÍNIO</button>
+          <button class="cenab" id="btnReplay" style="grid-column:1/-1">VINHETA DE REPLAY<span class="tecla">R</span></button>
+          <button class="cenab" data-c="oculto" style="grid-column:1/-1">OCULTAR TUDO<span class="tecla">O</span></button>
+        </div>
+      </div>
+
+      <button class="btn btn-q btn-full" id="btnLink">Ver link do OBS</button>
+      <div class="grid2">
+        <button class="btn btn-q" id="btnNova">Nova transmissão</button>
+        <button class="btn btn-q" style="color:var(--danger);border-color:var(--danger)" id="btnEnd">Encerrar</button>
+      </div>
+    </div>
+
+    <div class="cln">
+      <details>
+        <summary>Patrocinadores</summary>
+        <div class="stack" style="gap:12px">
+          <div class="body-sm">A logo aparece num selo de canto durante o jogo e no cartão de intervalo.
+            PNG com fundo transparente fica melhor. Até 2 MB.</div>
+          <div class="field"><label>Nome</label>
+            <input class="input" id="spNome" placeholder="Ex.: Arena Beach" maxlength="30"></div>
+          <div class="field"><label>Rótulo</label>
+            <input class="input" id="spRotulo" placeholder="Ex.: APOIO, BOLA OFICIAL" maxlength="18"></div>
+          <label class="btn btn-q btn-full" for="spArq" style="cursor:pointer">Escolher a logo</label>
+          <input type="file" id="spArq" accept="image/png,image/jpeg,image/webp" style="display:none">
+          <div class="mono" id="spMsg"></div>
+          <div class="stack" style="gap:8px" id="spLista"></div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Próximos jogos da quadra</summary>
+        <div class="stack" style="gap:12px">
+          <div class="grid2">
+            <div class="field"><label>Hora</label>
+              <input class="input" id="agHora" placeholder="18:00" maxlength="5" inputmode="numeric"></div>
+            <div class="field"><label>Categoria e fase</label>
+              <input class="input" id="agCtx" placeholder="Mista A · Semi" maxlength="28"></div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label>Dupla A</label>
+              <input class="input" id="agA" placeholder="Ana / Bia" maxlength="30"></div>
+            <div class="field"><label>Dupla B</label>
+              <input class="input" id="agB" placeholder="Cris / Dani" maxlength="30"></div>
+          </div>
+          <button class="btn btn-q btn-full" id="btnAgdAdd">Adicionar à fila</button>
+
+          <details>
+            <summary>Colar da planilha</summary>
+            <div class="stack" style="gap:10px">
+              <div class="body-sm">Selecione as células no Excel ou no Google Sheets e cole aqui.
+                A ordem é <b>hora · categoria e fase · dupla A · dupla B</b>. A linha de títulos é ignorada.</div>
+              <textarea class="input" id="agdCola" rows="4" spellcheck="false"
+                placeholder="18:00	Mista A · Semi	Ana / Bia	Cris / Dani"></textarea>
+              <button class="btn btn-q btn-full" id="btnAgdCola">Ler e acrescentar à fila</button>
+            </div>
+          </details>
+
+          <div class="mono" id="agdMsg">FILA DA QUADRA</div>
+          <div class="stack" style="gap:8px" id="agdLista"></div>
+        </div>
+      </details>
+
+    </div>
+    </div>
+    <div class="body-sm" style="text-align:center;margin-top:14px" id="syncMsg">—</div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// LEVEL BT · PLACAR DE TRANSMISSÃO
+// Um arquivo, dois modos:
+//   placar.html                → controle (celular de quem marca)
+//   placar.html?overlay=TOKEN  → camada transparente para o OBS
+// ══════════════════════════════════════════════════════════════
+// ⚠ TROQUE PELOS DADOS DO PROJETO NOVO (Supabase → Settings → API)
+// Este é o banco DA TRANSMISSÃO. Não é o mesmo do app Level BT.
+const SUPA_URL='COLE_AQUI_A_URL_DO_PROJETO';
+const SUPA_KEY='COLE_AQUI_A_CHAVE_PUBLICA';
+const supa = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY) : null;
+
+const PTS=['0','15','30','40'];
+const $=id=>document.getElementById(id);
+const qs=new URLSearchParams(location.search);
+const OVERLAY_TOKEN=qs.get('overlay');
+
+// ── Estado da partida ────────────────────────────────────────
+function novaPartida(o){
+  return {
+    t1:o.t1, t2:o.t2, cat:o.cat||'', fase:o.fase||'',
+    torneio:o.torneio||'', quadra:o.quadra||'', patrocinador:o.patrocinador||'',
+    proxima:'', cena:'placar', cartela:'', inicio:Date.now(), fimEm:null,
+    replayEm:0, agenda:Array.isArray(o.agenda)?o.agenda:[],
+    patrocinios:Array.isArray(o.patrocinios)?o.patrocinios:[],
+    escala:o.escala||.78,   // tamanho do placar na tela, 1 = tamanho do design
+    alvo:o.alvo||6, tbPts:o.tbPts||7, superTb:10, nSets:o.nSets||3, ouro:true,
+    p1:0,p2:0,        // pontos do game
+    g1:0,g2:0,        // games do set
+    s1:0,s2:0,        // sets vencidos
+    setsFeitos:[],    // [{g1,g2}]
+    inTb:false, tb1:0, tb2:0, superSet:false,
+    saque:0,          // 0..3 → índice do jogador
+    status:'playing', vencedor:null,
+    evento:null,      // selo momentâneo para o overlay
+    v:0               // contador de versão (dispara animação)
+  };
+}
+let M=null, ctrlKey=null, tokenPub=null, hist=[];
+
+// M é a partida no ar. Estas duas são a única porta de entrada e saída
+// dela — o resto do arquivo não mexe na variável direto.
+function partidaAtual(){ return M; }
+function definirPartida(m){ M=m; hist=[]; return M; }
+
+const nome=(t)=>t.filter(Boolean).join('/');
+const precisaSets=m=>m.nSets===3?2:1;
+
+// ── Regras ───────────────────────────────────────────────────
+function pontoPara(m,time){
+  if(m.status!=='playing') return;
+  hist.push(JSON.stringify(m));
+  m.evento=null;
+
+  if(m.inTb){
+    const alvo = m.superSet ? m.superTb : m.tbPts;
+    if(time===1)m.tb1++; else m.tb2++;
+    const a=m.tb1,b=m.tb2;
+    if((a>=alvo&&a-b>=2)||(b>=alvo&&b-a>=2)){
+      const vTb = a>b?1:2;
+      if(m.superSet){                       // super tiebreak = o set inteiro
+        m.setsFeitos.push({g1:vTb===1?1:0,g2:vTb===2?1:0,tb:[a,b]});
+        vTb===1?m.s1++:m.s2++;
+        fecharPartidaSePreciso(m);
+      } else {
+        vTb===1?m.g1++:m.g2++;
+        m.setsFeitos.push({g1:m.g1,g2:m.g2,tb:[a,b]});
+        vTb===1?m.s1++:m.s2++;
+        m.evento={t:'SET',time:vTb};
+        novoSet(m);
+      }
+      m.inTb=false;m.tb1=0;m.tb2=0;
+      trocaSaque(m);
+    } else if((a+b)%2===1) trocaSaque(m);   // no tiebreak troca a cada 2 pontos
+    m.v++; return;
+  }
+
+  const meu = time===1?'p1':'p2', dele = time===1?'p2':'p1';
+  const sacavaTime = saqueDoTime(m);
+
+  if(m[meu]>=3 && m[dele]>=3){              // 40—40
+    if(m.ouro){ ganhaGame(m,time,sacavaTime); m.v++; return; }
+    if(m[dele]>3){ m[dele]=3; m.v++; return; }   // tira a vantagem
+    if(m[meu]===4){ ganhaGame(m,time,sacavaTime); m.v++; return; }
+    m[meu]++; m.v++; return;
+  }
+  if(m[meu]>=3){ ganhaGame(m,time,sacavaTime); m.v++; return; }
+  m[meu]++; m.v++;
+}
+
+function ganhaGame(m,time,sacavaTime){
+  m.p1=0;m.p2=0;
+  time===1?m.g1++:m.g2++;
+  if(sacavaTime && sacavaTime!==time) m.evento={t:'QUEBROU',time};
+  else m.evento={t:'GAME',time};
+
+  const a=time===1?m.g1:m.g2, b=time===1?m.g2:m.g1;
+  if(a>=m.alvo && a-b>=2){
+    m.setsFeitos.push({g1:m.g1,g2:m.g2});
+    time===1?m.s1++:m.s2++;
+    m.evento={t:'SET',time};
+    if(!fecharPartidaSePreciso(m)) novoSet(m);
+  } else if(m.g1>=m.alvo && m.g2>=m.alvo && m.g1===m.g2){
+    m.inTb=true;m.tb1=0;m.tb2=0;
+    m.evento={t:'TIEBREAK'};
+  }
+  trocaSaque(m);
+}
+
+// Depois de corrigir os games na mão, relê o placar e liga ou desliga o
+// tiebreak. Era isto que faltava: a correção manual mexia nos games sem
+// nunca reavaliar, então ajustar até 6—6 não entrava no tie.
+//
+// De propósito NÃO fecho o set aqui. Corrigindo de um em um, o placar
+// passa por 6—0 no caminho até 6—5, e fechar o set nessa passagem
+// apagaria os games e deixaria o operador sem saída. Fechar set continua
+// sendo coisa do jogo correndo; na mão, existem os botões de sets.
+function conferirTiebreak(m){
+  if(m.status!=='playing' || m.superSet) return;
+  const empatadoNoAlvo = m.g1>=m.alvo && m.g2>=m.alvo && m.g1===m.g2;
+  if(empatadoNoAlvo && !m.inTb){
+    m.inTb=true; m.tb1=0; m.tb2=0; m.p1=0; m.p2=0;
+  } else if(!empatadoNoAlvo && m.inTb){
+    m.inTb=false; m.tb1=0; m.tb2=0;      // saiu do 6—6, sai do tie
+  }
+}
+
+function novoSet(m){
+  m.g1=0;m.g2=0;m.inTb=false;m.tb1=0;m.tb2=0;
+  // terceiro set vira super tiebreak até 10
+  if(m.nSets===3 && m.s1===1 && m.s2===1){ m.superSet=true; m.inTb=true; }
+}
+function fecharPartidaSePreciso(m){
+  const need=precisaSets(m);
+  if(m.s1>=need||m.s2>=need){
+    m.status='finished'; m.vencedor=m.s1>m.s2?1:2; m.fimEm=Date.now();
+    m.evento={t:'FIM',time:m.vencedor};
+    anotarResultado(m);
+    return true;
+  }
+  return false;
+}
+// Tempo de jogo. Conta do primeiro ponto e congela quando a partida acaba.
+function duracao(m){
+  if(!m||!m.inicio) return 0;
+  return Math.max(0, ((m.fimEm||Date.now()) - m.inicio)/1000);
+}
+function relogio(m){
+  const s=Math.floor(duracao(m));
+  const h=Math.floor(s/3600), mi=Math.floor(s%3600/60), se=s%60;
+  const dd=n=>String(n).padStart(2,'0');
+  return h ? h+':'+dd(mi)+':'+dd(se) : mi+':'+dd(se);
+}
+
+// ── Agenda da quadra ─────────────────────────────────────────
+// Cada item: {hora, ctx, a, b, placar, venc}
+//   placar vazio  → jogo ainda por vir
+//   placar cheio  → resultado, e venc diz qual dupla ganhou (1 ou 2)
+// Fica guardada no aparelho que controla, então atravessa as partidas:
+// o resultado de cada jogo entra sozinho quando a partida acaba.
+const AGENDA_LS='lbt_agenda';
+const PATRO_LS='lbt_patrocinios';
+function lerAgenda(){
+  try{ const a=JSON.parse(localStorage.getItem(AGENDA_LS)||'[]'); return Array.isArray(a)?a:[]; }
+  catch(e){ return []; }
+}
+function gravarAgenda(a){
+  try{ localStorage.setItem(AGENDA_LS,JSON.stringify(a.slice(-40))); }catch(e){}
+}
+function lerPatrocinios(){
+  try{ const a=JSON.parse(localStorage.getItem(PATRO_LS)||'[]'); return Array.isArray(a)?a:[]; }
+  catch(e){ return []; }
+}
+function gravarPatrocinios(a){
+  try{ localStorage.setItem(PATRO_LS,JSON.stringify(a.slice(0,8))); }catch(e){}
+}
+
+// ── Patrocinadores ────────────────────────────────────────────────
+// Cada um: {nome, rotulo, img}.  img é o endereço público da logo no
+// Supabase; fica no payload, então o overlay do OBS recebe junto.
+const LOGO_MAX = 2*1024*1024;
+const LOGO_TIPOS = ['image/png','image/jpeg','image/webp'];
+
+function validarLogo(arq){
+  if(!arq) return 'Nenhum arquivo escolhido.';
+  if(LOGO_TIPOS.indexOf(arq.type)<0) return 'A logo precisa ser PNG, JPEG ou WEBP.';
+  if(arq.size>LOGO_MAX) return 'A logo passou de 2 MB. Reduza a imagem e tente de novo.';
+  return null;
+}
+function nomeDeArquivo(arq){
+  const ext=(arq.name.match(/\.[a-z0-9]+$/i)||['.png'])[0].toLowerCase();
+  const limpo=String(arq.name).replace(/\.[^.]*$/,'').replace(/[^a-z0-9]+/gi,'-').slice(0,32) || 'logo';
+  return Date.now().toString(36)+'-'+limpo+ext;
+}
+
+async function enviarLogo(arq){
+  const erro=validarLogo(arq);
+  if(erro) throw new Error(erro);
+  if(!supa) throw new Error('Sem conexão com o banco.');
+  const caminho=nomeDeArquivo(arq);
+  const {error}=await supa.storage.from('logos').upload(caminho,arq,{cacheControl:'31536000'});
+  if(error){
+    const bruto=[error.message,error.error,error.statusCode].filter(Boolean).join(' · ');
+    throw new Error('envio da logo → '+(bruto||'erro sem mensagem'));
+  }
+  const {data}=supa.storage.from('logos').getPublicUrl(caminho);
+  return data.publicUrl;
+}
+
+// Um jogo da fila, montado a partir dos campos do formulário.
+function novoJogo(hora, ctx, a, b){
+  const lp=x=>String(x||'').trim();
+  return {hora:lp(hora), ctx:lp(ctx).toUpperCase(), a:lp(a), b:lp(b), placar:'', venc:0};
+}
+function jogoValido(j){ return !!(j && (j.a || j.b)); }
+
+// ── Colar da planilha ─────────────────────────────────────────────
+// O Excel e o Google Sheets copiam células separadas por TAB. Também
+// aceito ponto-e-vírgula e vírgula, para quem colar de um .csv.
+// A ordem esperada é: hora · categoria e fase · dupla A · dupla B.
+// Se vierem só duas colunas, entendo como as duas duplas.
+// Uma linha "Ana/Bia x Cris/Dani" numa célula só também vale.
+function colunasDaLinha(l){
+  if(l.indexOf('\t')>=0) return l.split('\t');
+  if(l.indexOf(';') >=0) return l.split(';');
+  if(l.indexOf('|') >=0) return l.split('|');
+  if(l.indexOf(',') >=0) return l.split(',');
+  return [l];
+}
+function pareceCabecalho(c){
+  const t=c.join(' ').toLowerCase();
+  return /\b(hora|hor[áa]rio|categoria|fase|dupla|time|jogo|confronto|adversári)/.test(t)
+      && !/[x×]/.test(c.join(''));
+}
+function lerPlanilha(txt){
+  const fora=[];
+  String(txt||'').split(/\r?\n/).forEach(linha=>{
+    const bruta=linha.trim();
+    if(!bruta) return;
+    const c=colunasDaLinha(bruta).map(x=>x.trim());
+    if(pareceCabecalho(c)) return;                 // pula a linha de títulos
+
+    let hora='', ctx='', a='', b='';
+    if(c.length>=4){ [hora,ctx,a,b]=c; }
+    else if(c.length===3){ [ctx,a,b]=c; if(/^\d{1,2}[:h]/.test(c[0])){ hora=c[0]; ctx=''; a=c[1]; b=c[2]; } }
+    else if(c.length===2){ [a,b]=c; }
+    else {
+      // uma célula só: procura o "x" que separa as duplas
+      const d=bruta.split(/\s+[x×]\s+/i);
+      a=d[0]||''; b=d[1]||'';
+    }
+    // a última coluna ainda pode trazer as duas duplas juntas
+    if(a && !b){ const d=a.split(/\s+[x×]\s+/i); if(d.length===2){ a=d[0]; b=d[1]; } }
+
+    const j=novoJogo(hora,ctx,a,b);
+    if(jogoValido(j)) fora.push(j);
+  });
+  return fora;
+}
+
+// Quando a partida acaba, o resultado entra sozinho na agenda. Se esse
+// jogo já estava na fila, ele vira resultado ali mesmo, no lugar certo.
+function anotarResultado(m){
+  if(!Array.isArray(m.agenda)) m.agenda=[];
+  const a=nome(m.t1), b=nome(m.t2), placar=resumoSets(m);
+  const igual=(x,y)=>String(x||'').trim().toLowerCase()===String(y||'').trim().toLowerCase();
+  const i=m.agenda.findIndex(it=>!it.placar && igual(it.a,a) && igual(it.b,b));
+  const linha={hora:'', ctx:[m.cat,m.fase].filter(Boolean).join(' · ').toUpperCase(),
+               a, b, placar, venc:m.vencedor};
+  if(i>=0) m.agenda[i]=Object.assign({},m.agenda[i],linha,{hora:m.agenda[i].hora});
+  else m.agenda.push(linha);
+  gravarAgenda(m.agenda);
+}
+
+// Placar final em texto curto: "6-4 3-6 10-8"
+function resumoSets(m){
+  return m.setsFeitos.map(s=>(s.tb&&s.g1+s.g2<=1)?(s.tb[0]+'-'+s.tb[1]):(s.g1+'-'+s.g2)).join(' ');
+}
+
+// "Ana / Bia" → ['Ana','Bia'].  A dupla pode vir com um nome só.
+function duplaDeTexto(s){
+  return String(s||'').split('/').map(x=>x.trim()).filter(Boolean).slice(0,2);
+}
+
+// Troca o jogo SEM criar transmissão nova. O link do OBS é da quadra,
+// não da partida: ele fica igual do começo ao fim do torneio.
+// Some só o que é da partida; a fila, as logos, o tamanho e as regras
+// da quadra continuam de pé.
+function trocarJogo(m, jogo){
+  m.t1 = duplaDeTexto(jogo.a);
+  m.t2 = duplaDeTexto(jogo.b);
+  const partes = String(jogo.ctx||'').split('·').map(x=>x.trim());
+  m.cat  = partes[0] || '';
+  m.fase = partes.slice(1).join(' · ');
+  m.p1=0; m.p2=0; m.g1=0; m.g2=0; m.s1=0; m.s2=0;
+  m.setsFeitos=[]; m.inTb=false; m.tb1=0; m.tb2=0; m.superSet=false;
+  m.saque=0; m.status='playing'; m.vencedor=null; m.evento=null;
+  m.inicio=Date.now(); m.fimEm=null; m.cena='placar'; m.cartela='';
+  m.v++;
+  return m;
+}
+
+function saqueDoTime(m){ return (m.saque===0||m.saque===1)?1:2; }
+function trocaSaque(m){ m.saque=(m.saque+1)%4; }
+
+// ── Momentos de tensão (derivados do placar) ─────────────────
+
+// 40—40 jogando ponto de ouro: no beach tennis é o "quarentão".
+// Quem fizer o ponto leva o game — não existe vantagem.
+function ehQuarentao(m){
+  return !!m.ouro && !m.inTb && m.status==='playing' && m.p1>=3 && m.p2>=3;
+}
+
+// O que está em jogo neste game, para quem vencê-lo.
+// No quarentão os dois lados estão a um ponto, então olhamos os dois.
+function oQueVale(m){
+  const fecha=(gMeu,gDele,sMeu)=>{
+    if(!(gMeu+1>=m.alvo && (gMeu+1)-gDele>=2)) return 'game';
+    return (sMeu+1)>=precisaSets(m) ? 'jogo' : 'set';
+  };
+  const a=fecha(m.g1,m.g2,m.s1), b=fecha(m.g2,m.g1,m.s2);
+  if(a==='jogo'||b==='jogo') return 'VALE O JOGO';
+  if(a==='set' ||b==='set' ) return 'VALE O SET';
+  return 'QUEM FAZ, LEVA';
+}
+
+function tensao(m){
+  if(m.status!=='playing') return null;
+  if(m.inTb){
+    const alvo=m.superSet?m.superTb:m.tbPts;
+    const a=m.tb1,b=m.tb2;
+    const p=m.superSet?'MATCH POINT':'SET POINT';
+    if(a>=alvo-1&&a-b>=1) return {big:p};
+    if(b>=alvo-1&&b-a>=1) return {big:p};
+    return null;
+  }
+
+  // No quarentão o aviso é a tarja discreta embaixo do placar. O selo
+  // grande só entra se o game em disputa fecha um set ou o jogo.
+  if(ehQuarentao(m)){
+    const vale=oQueVale(m);
+    if(vale==='VALE O JOGO') return {big:'MATCH POINT'};
+    if(vale==='VALE O SET')  return {big:'SET POINT'};
+    return null;
+  }
+
+  const chance=(meu,dele,gMeu,gDele)=>{
+    if(!(meu>=3 && meu>dele)) return null;
+    const fecharia = gMeu+1>=m.alvo && (gMeu+1)-gDele>=2;
+    if(!fecharia) return {big:'GAME POINT'};
+    const setsDepois = (gMeu===m.g1?m.s1:m.s2)+1;
+    return {big: setsDepois>=precisaSets(m) ? 'MATCH POINT' : 'SET POINT'};
+  };
+  return chance(m.p1,m.p2,m.g1,m.g2) || chance(m.p2,m.p1,m.g2,m.g1);
+}
+
+// ── Sincronização ────────────────────────────────────────────
+async function publicar(){
+  if(!supa||!ctrlKey||!M) return;
+  try{ localStorage.setItem('lbt_bc',JSON.stringify({token:tokenPub,key:ctrlKey})); }catch(e){}
+  try{
+    await supa.rpc('bc_write',{p_control_key:ctrlKey,p_payload:M});
+    const el=$('syncMsg'); if(el) el.textContent='Sincronizado · '+new Date().toLocaleTimeString('pt-BR');
+  }catch(e){
+    const el=$('syncMsg'); if(el) el.textContent='Falha ao sincronizar. Tentando de novo…';
+  }
+}
+
+// ══════════════ MODO OVERLAY ══════════════
+// O palco tem sempre 1920×1080. Aqui só encolhemos o conjunto todo pelo
+// menor lado e centralizamos — a proporção Full HD nunca se deforma.
+// No OBS, com a fonte em 1920×1080, a escala dá exatamente 1.
+function escalar(){
+  const st=$('stage'); if(!st) return;
+  const s=Math.min(innerWidth/1920, innerHeight/1080);
+  const dx=Math.round((innerWidth  - 1920*s)/2);
+  const dy=Math.round((innerHeight - 1080*s)/2);
+  st.style.transform='translate('+dx+'px,'+dy+'px) scale('+s+')';
+}
+let ultimoV=-1, ultimoEvento='', tensaoAtual='', brkTimer=null, identTimer=null, identAtual='', ultimoM=null;
+
+function setsDoTime(m,time){
+  // caixas: um quadrado por set já jogado + um "•" para o set em andamento
+  const out=[];
+  m.setsFeitos.forEach(s=>{
+    const meu = time===1?s.g1:s.g2, dele = time===1?s.g2:s.g1;
+    const venceu = (s.tb && (meu>dele)) || meu>dele;
+    out.push('<span class="'+(venceu?'won':'lost')+'">'+meu+'</span>');
+  });
+  if(m.status==='playing') out.push('<span>•</span>');
+  return out.join('');
+}
+function linhaSets(m){
+  if(!m.setsFeitos.length) return 'SET 1';
+  const placar=m.setsFeitos.map(s=>s.g1+'-'+s.g2).join('  ');
+  return (m.status==='finished'?'FINAL':'SET '+(m.setsFeitos.length+1))+' · '+placar;
+}
+function pontoTexto(m,time){
+  if(m.inTb) return time===1?m.tb1:m.tb2;
+  const v = time===1?m.p1:m.p2;
+  return v>3?'AD':PTS[Math.min(v,3)];
+}
+
+function pintarOverlay(m){
+  if(!m||!m.t1) return;
+  const mudou = m.v!==ultimoV;
+
+  // tamanho escolhido no controle
+  $('stage').style.setProperty('--esc', m.escala||.78);
+
+  $('ovCtx').textContent=[m.cat,m.fase].filter(Boolean).join(' · ').toUpperCase()||'PARTIDA';
+  $('ovTempo').textContent=relogio(m);
+  $('ovN1').textContent=nome(m.t1);
+  $('ovN2').textContent=nome(m.t2);
+  $('ovB1').innerHTML=setsDoTime(m,1);
+  $('ovB2').innerHTML=setsDoTime(m,2);
+  $('ovSetline').textContent=linhaSets(m);
+
+  trocaValor($('ovG1'), String(m.g1), mudou);
+  trocaValor($('ovG2'), String(m.g2), mudou);
+  trocaValor($('ovP1'), String(pontoTexto(m,1)), mudou);
+  trocaValor($('ovP2'), String(pontoTexto(m,2)), mudou);
+
+  const sq=saqueDoTime(m), jogando=m.status==='playing';
+
+  // quarentão: 40—40 com ponto de ouro
+  const ouro=ehQuarentao(m) && jogando;
+  $('ovPtcol').classList.toggle('ouro', ouro);
+  const tOuro=$('ovOuro');
+  if(ouro===tOuro.classList.contains('hidden')){          // mudou de estado
+    tOuro.classList.toggle('hidden', !ouro);
+    if(ouro){ tOuro.style.animation='none'; void tOuro.offsetWidth; tOuro.style.animation=''; }
+  }
+  $('ovR1').classList.toggle('srv',sq===1&&jogando);
+  $('ovR2').classList.toggle('srv',sq===2&&jogando);
+  $('ovMark').style.top = (sq===2?'calc(50% + 1.5px)':'0');
+  $('ovMark').style.display = jogando?'block':'none';
+
+  // — selo de tensão —
+  // O selo é de passagem: entra, fica TENSAO_MS na tela e sai sozinho.
+  // Se o placar mudar e nascer uma tensão diferente, ele passa de novo.
+  const t=(m.cena&&m.cena!=='placar')?null:tensao(m);
+  const tChave = t ? t.big+'|'+(t.sub||'') : '';
+  if(tChave!==tensaoAtual){
+    tensaoAtual=tChave;
+    const el=$('ovTens'), big=$('ovTensBig');
+    clearTimeout(tensTimer);
+    if(t){
+      big.innerHTML=t.big.replace(' ','<br>');
+      $('ovTensSub').textContent = t.sub || ((sq===1?nome(m.t1):nome(m.t2)).toUpperCase()+' SACA');
+      el.classList.remove('hide'); anima(el,'show');
+      tensTimer=setTimeout(()=>{ el.classList.remove('show'); el.classList.add('hide'); }, TENSAO_MS);
+    } else { el.classList.remove('show'); el.classList.add('hide'); }
+  }
+
+  // — quebra de saque (momentâneo) —
+  const ev=m.evento?JSON.stringify(m.evento)+'#'+m.v:'';
+  if(m.evento && ev!==ultimoEvento){
+    ultimoEvento=ev;
+    if(m.evento.t==='QUEBROU'){
+      const perdeu = m.evento.time===1?m.t2:m.t1;
+      $('ovBrkSub').textContent='SAQUE DE '+nome(perdeu).toUpperCase();
+      const b=$('ovBrk'); b.classList.remove('hide'); anima(b,'show');
+      clearTimeout(brkTimer);
+      brkTimer=setTimeout(()=>{ const b=$('ovBrk'); b.classList.remove('show'); b.classList.add('hide'); },4000);
+    }
+  }
+
+  // — vinheta de replay: uma passada só, disparada por carimbo de hora —
+  // Não é cena, é evento. Assim o overlay toca a cortina inteira mesmo que
+  // só veja o comando alguns décimos depois de o controle ter apertado.
+  const rEm=m.replayEm||0;
+  if(rEm && rEm!==ultimoReplay){
+    ultimoReplay=rEm;
+    if(Date.now()-rEm < 15000) tocarReplay();
+  }
+
+  // — cena (placar · oculto · cartela · agenda · patrocínio) —
+  const cena=m.cena||'placar';
+  if(cena!==identAtual){
+    identAtual=cena;
+    const ident=$('ovIdent'), br=$('ovBrandTR'), spo=$('ovSpo'), agd=$('ovAgd');
+    const fora=el=>{ el.classList.remove('show'); el.classList.add('hide'); };
+
+    // recolhe tudo antes de montar a cena nova
+    fora(ident); fora(spo); fora(agd); br.classList.add('hidden');
+
+    if(cena==='cartela'){
+      $('idTorn').textContent=(m.torneio||'LEVEL BT').toUpperCase();
+      $('idCat').textContent=(m.cat||'—').toUpperCase();
+      $('idFase').textContent=(m.fase||'').toUpperCase();
+      $('idMeta').innerHTML=[m.quadra,new Date().toLocaleDateString('pt-BR')].filter(Boolean)
+        .map(x=>'<span>'+String(x).toUpperCase()+'</span>').join('');
+      ident.classList.remove('hide'); anima(ident,'show'); br.classList.remove('hidden');
+    } else if(cena==='patroc'){
+      const ps=(m.patrocinios||[]).filter(p=>p&&(p.img||p.nome));
+      $('spoNome').textContent=(m.patrocinador||ps[0]&&ps[0].nome||'SEU PATROCINADOR').toUpperCase();
+      $('spoTorn').textContent=(m.torneio||'').toUpperCase();
+      const mc=$('spoMarcas');
+      mc.classList.toggle('hidden', !ps.length);
+      mc.innerHTML=ps.slice(0,4).map(p=>'<div class="m">'+(p.img
+        ? '<img src="'+esc(p.img)+'" alt="'+esc(p.nome||'')+'">'
+        : '<div class="txt">'+esc(p.nome||'').toUpperCase()+'</div>')+'</div>').join('');
+      spo.classList.remove('hide'); anima(spo,'show');
+    } else if(cena==='agenda'){
+      montarAgenda(m);
+      agd.classList.remove('hide'); anima(agd,'show');
+    }
+  }
+  // A arte de intervalo se redesenha a cada atualização, não só ao entrar:
+  // assim mexer na fila de jogos aparece na hora, com ela já no ar.
+  if(cena==='agenda') montarAgenda(m);
+
+  // o placar some nas cenas que ocupam a tela
+  const escondeBug = cena==='oculto'||cena==='cartela'||cena==='agenda'||cena==='patroc';
+  const fora = escondeBug || m.status==='finished';
+  $('bug').classList.toggle('out', fora);
+  // por classe, não por style.opacity: a animação com fill-mode ganha do estilo inline
+  $('ovPills').classList.toggle('out', fora);
+  $('ovSetline').classList.toggle('out', fora);
+  pintarApoio(m.patrocinios);
+  $('ovApo').classList.toggle('out', escondeBug);
+
+  // — fim de jogo —
+  // A cartela do vencedor obedece à cena, como todo o resto: OCULTAR
+  // TUDO, PRÓXIMOS ou PATROCÍNIO tiram ela da tela. Antes ela ficava
+  // por cima de tudo até alguém começar outro jogo.
+  const fim=$('ovFim'), veil=$('ovVeil');
+  if(m.status==='finished' && cena==='placar'){
+    const venc=m.vencedor===1?1:2, perd=venc===1?2:1;
+    $('fCtx').textContent=[m.torneio,m.cat,m.fase].filter(Boolean).join(' · ').toUpperCase();
+    $('fW1').textContent=nome(venc===1?m.t1:m.t2);
+    $('fW2').textContent=nome(perd===1?m.t1:m.t2);
+    const caixas=(time)=>m.setsFeitos.map(s=>{
+      const meu=time===1?s.g1:s.g2, dele=time===1?s.g2:s.g1;
+      return '<span class="'+(meu>dele?'w':'')+'">'+meu+'</span>';
+    }).join('');
+    $('fS1').innerHTML=caixas(venc); $('fS2').innerHTML=caixas(perd);
+    const dur=Math.max(1,Math.round(duracao(m)/60));
+    $('fFt').innerHTML='<span>DURAÇÃO '+dur+' MIN</span>'+
+      (m.proxima?'<b>AVANÇA PARA '+String(m.proxima).toUpperCase()+'</b>':'');
+    if(!fim.classList.contains('show')){
+      fim.classList.remove('hide'); veil.classList.remove('hide');
+      anima(veil,'show'); anima(fim,'show');
+    }
+    $('ovTens').classList.remove('show'); $('ovTens').classList.add('hide');
+  } else if(fim.classList.contains('show')){
+    fim.classList.remove('show');  fim.classList.add('hide');
+    veil.classList.remove('show'); veil.classList.add('hide');
+  }
+  ultimoV=m.v; ultimoM=m;
+}
+function anima(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+// A cortina varre a tela uma vez e sai. Serve para cobrir o corte do
+// vídeo para o replay — não fica em loop.
+// Monta a arte de intervalo: o que já foi jogado à esquerda, o que vem
+// à direita, com o próximo jogo destacado.
+function montarAgenda(m){
+  const ag=Array.isArray(m.agenda)?m.agenda:[];
+  $('agdTorn').textContent=[m.torneio,m.quadra].filter(Boolean).join(' · ').toUpperCase();
+
+  const feitos=ag.filter(i=>i.placar).slice(-4);
+  const prox  =ag.filter(i=>!i.placar).slice(0,4);
+
+  const linha=(nm,cls,sc)=>'<div class="ln"><div class="du '+cls+'">'+esc(nm||'—')+'</div>'+
+    (sc!=null?'<div class="sc '+(cls==='perdeu'?'perdeu':'')+'">'+esc(sc)+'</div>':'')+'</div>';
+
+  $('agdFeitos').innerHTML = feitos.length ? feitos.map(i=>{
+    const sets=String(i.placar).split(' ');
+    const inv=s=>s.split('-').reverse().join('-');
+    const a=i.venc===2?'perdeu':'venceu', b=i.venc===2?'venceu':'perdeu';
+    return '<div class="it">'+
+      '<div class="top"><div class="cx">'+esc(i.ctx||'')+'</div></div>'+
+      linha(i.a,a,i.placar)+'<div class="rule"></div>'+
+      linha(i.b,b,sets.map(inv).join(' '))+'</div>';
+  }).join('') : '<div class="vaz">AINDA NÃO HOUVE JOGO</div>';
+
+  $('agdProx').innerHTML = prox.length ? prox.map((i,k)=>
+    '<div class="it'+(k===0?' now':'')+'">'+
+      '<div class="top"><div class="hr">'+esc(i.hora||(k===0?'A SEGUIR':''))+'</div>'+
+      '<div class="cx">'+esc(i.ctx||'')+'</div></div>'+
+      linha(i.a,'')+'<div class="rule"></div>'+linha(i.b,'')+'</div>').join('')
+    : '<div class="vaz">SEM JOGOS NA FILA</div>';
+}
+
+const REPLAY_MS=2600;
+const TENSAO_MS=6000;   // quanto tempo o selo de GAME/SET/MATCH POINT fica na tela
+const APOIO_MS=12000;   // de quanto em quanto tempo o selo de canto troca de marca
+let ultimoReplay=0, repTimer=null, tensTimer=null;
+let apoIdx=0, apoTimer=null, apoChave='';
+
+// Selo de canto: uma marca por vez, revezando. Se houver só uma, ela fica.
+function pintarApoio(lista){
+  const ps=(Array.isArray(lista)?lista:[]).filter(p=>p&&(p.img||p.nome));
+  const el=$('ovApo');
+  // só remonta quando a lista muda de verdade — senão o revezamento
+  // reiniciaria a cada leitura do banco e a marca nunca trocaria
+  const chave=JSON.stringify(ps.map(p=>[p.nome,p.rotulo,p.img]));
+  if(chave===apoChave) return;
+  apoChave=chave; apoIdx=0;
+
+  if(!ps.length){ el.classList.add('hidden'); clearInterval(apoTimer); apoTimer=null; return; }
+  el.classList.remove('hidden');
+
+  const mostrar=()=>{
+    const p=ps[apoIdx % ps.length];
+    el.innerHTML='<div class="rot">'+esc(p.rotulo||'APOIO')+'</div>'+
+      '<div class="marca">'+(p.img
+        ? '<img src="'+esc(p.img)+'" alt="'+esc(p.nome||'')+'">'
+        : '<div class="txt">'+esc(p.nome||'').toUpperCase()+'</div>')+'</div>';
+    anima(el,'troca');
+  };
+  mostrar();
+  clearInterval(apoTimer); apoTimer=null;
+  if(ps.length>1){
+    apoTimer=setInterval(()=>{ apoIdx++; mostrar(); }, APOIO_MS);
+  }
+}
+function tocarReplay(){
+  const rep=$('ovRep');
+  rep.classList.remove('hide'); rep.classList.add('show');
+  rep.querySelectorAll('.bars i').forEach(i=>{ i.style.animation='none'; void i.offsetWidth; i.style.animation=''; });
+  clearTimeout(repTimer);
+  repTimer=setTimeout(()=>{ rep.classList.remove('show'); rep.classList.add('hide'); }, REPLAY_MS);
+}
+
+// Troca de valor no design: a cela pisca em laranja e o número sobe.
+function trocaValor(el,valor,animar){
+  const alvo=el.firstElementChild || el;
+  if(alvo.textContent===valor) return;
+  alvo.textContent=valor;
+  if(!animar) return;
+  anima(el,'flash');
+  anima(alvo,'flip');
+}
+
+// ── DEMO: partida simulada, para testar o OBS sem banco nem celular ──
+function loopDemo(){
+  const D=novaPartida({t1:['Marina','Léo'],t2:['Rafa','Duda'],
+    cat:'Mista B',fase:'Quartas de final',torneio:'Copa Verão',quadra:'Quadra 2',
+    alvo:6,tbPts:7,nSets:3,
+    agenda:[
+      {hora:'',      ctx:'MISTA B · OITAVAS', a:'Ju / Tom',      b:'Lia / Vitor',  placar:'6-2 6-4', venc:1},
+      {hora:'',      ctx:'MISTA B · OITAVAS', a:'Bia / Caio',    b:'Pedro / Nina', placar:'7-5 6-3', venc:1},
+      {hora:'17:30', ctx:'MISTA B · SEMI',    a:'Ju / Tom',      b:'Bia / Caio',   placar:'', venc:0},
+      {hora:'18:15', ctx:'MISTA B · FINAL',   a:'A definir',     b:'A definir',    placar:'', venc:0}
+    ]});
+  // deixa o jogo perto do fim para ver todos os estados rápido
+  D.setsFeitos.push({g1:6,g2:4}); D.s1=1; D.g1=5; D.g2=4;
+  let n=0;
+  pintarOverlay(D);
+  setTimeout(()=>{ D.cartela='ident#demo'; D.v++; pintarOverlay(D); }, 1500);
+  setTimeout(()=>{ D.cartela=''; D.v++; pintarOverlay(D); }, 10500);
+  // uma vinheta de replay no meio, para conferir a passada única
+  setTimeout(()=>{ D.replayEm=Date.now(); D.v++; pintarOverlay(D); }, 18000);
+  const tick=()=>{
+    if(D.status==='finished'){
+      // depois da cartela final, a arte de intervalo com resultados e próximos
+      setTimeout(()=>{ D.cena='agenda'; D.v++; pintarOverlay(D); }, 6000);
+      setTimeout(()=>location.reload(), 15000);          // recomeça o ciclo
+      return;
+    }
+    // alterna os pontos com uma pitada de aleatório
+    const quem = (n<3) ? 1 : (Math.random()<0.55?1:2);
+    pontoPara(D,quem); n++;
+    pintarOverlay(D);
+    setTimeout(tick, 2200);
+  };
+  setTimeout(tick, 11500);
+}
+
+async function loopOverlay(){
+  try{
+    const {data}=await supa.rpc('bc_read',{p_token:OVERLAY_TOKEN});
+    if(data && data.t1) pintarOverlay(data);
+  }catch(e){}
+  setTimeout(loopOverlay,900);
+}
+
+// ══════════════ MODO CONTROLE ══════════════
+let cfg={alvo:6,tbPts:7,nSets:3};
+function segs(){
+  const mk=(el,vals,key,suf)=>{
+    el.innerHTML=vals.map(v=>`<button data-v="${v}" class="${cfg[key]===v?'on':''}">${v}${suf||''}</button>`).join('');
+    el.querySelectorAll('button').forEach(b=>b.onclick=()=>{cfg[key]=Number(b.dataset.v);segs();});
+  };
+  mk($('segGames'),[4,6],'alvo');
+  mk($('segTb'),[7,10],'tbPts');
+  mk($('segSets'),[1,3],'nSets');
+}
+
+// Tamanho do placar na tela. Fica guardado na partida, então o overlay
+// muda junto — não precisa mexer na fonte do OBS.
+const TAMANHOS=[{v:.6,r:'P'},{v:.78,r:'M'},{v:.9,r:'G'},{v:1,r:'XG'}];
+function pintarEscala(){
+  const at=M.escala||.78;
+  $('segEsc').innerHTML=TAMANHOS.map(t=>
+    `<button data-v="${t.v}" class="${Math.abs(at-t.v)<.001?'on':''}">${t.r}</button>`).join('');
+  $('segEsc').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    M.escala=Number(b.dataset.v); M.v++; pintarControle(); publicar();
+  });
+  $('escVal').textContent=Math.round(at*100)+'%';
+}
+
+// A fila da quadra, com o que já foi jogado logo abaixo do que falta.
+function pintarAgendaLista(agenda){
+  const ag=Array.isArray(agenda)?agenda:[];
+  const prox=ag.filter(i=>!i.placar), feitos=ag.filter(i=>i.placar);
+  const linha=(i,idx)=>`<div class="agrow${i.placar?' pronto':''}">
+      <div class="qd">
+        <div class="cab">${esc([i.hora,i.ctx].filter(Boolean).join(' · ')||'SEM HORÁRIO')}</div>
+        <div class="du">${esc(i.a||'—')} × ${esc(i.b||'—')}</div>
+      </div>
+      ${i.placar?`<div class="res">${esc(i.placar)}</div>`
+                :`<button class="jg" data-j="${idx}">JOGAR</button>
+                  <button class="x" data-i="${idx}">TIRAR</button>`}
+    </div>`;
+  const html=ag.map((i,idx)=>({i,idx}))
+               .sort((x,y)=>(x.i.placar?1:0)-(y.i.placar?1:0))
+               .map(({i,idx})=>linha(i,idx)).join('');
+  $('agdLista').innerHTML = html || '<div class="body-sm">Nenhum jogo na fila ainda.</div>';
+  $('agdLista').querySelectorAll('.x').forEach(b=>b.onclick=()=>tirarDaFila(Number(b.dataset.i)));
+  $('agdLista').querySelectorAll('.jg').forEach(b=>b.onclick=()=>jogarDaFila(Number(b.dataset.j)));
+  $('agdMsg').textContent = prox.length
+    ? prox.length+(prox.length===1?' JOGO NA FILA':' JOGOS NA FILA')+
+      (feitos.length?' · '+feitos.length+' JOGADO'+(feitos.length===1?'':'S'):'')
+    : 'FILA DA QUADRA';
+}
+
+// Põe no ar o jogo escolhido da fila. Mesma transmissão, mesmo link.
+function jogarDaFila(i){
+  if(!M||!Array.isArray(M.agenda)) return;
+  const j=M.agenda[i];
+  if(!j||j.placar) return;                       // jogo já disputado não volta
+  if(M.status==='playing' && (M.g1||M.g2||M.p1||M.p2||M.s1||M.s2)
+     && !confirm('Trocar de jogo agora? O placar atual não foi encerrado e será perdido.')) return;
+  trocarJogo(M,j);
+  hist=[];
+  pintarControle(); publicar();
+}
+
+// A lista de patrocinadores no painel do controle.
+function pintarPatrocinios(lista){
+  const ps=Array.isArray(lista)?lista:[];
+  $('spLista').innerHTML = ps.length ? ps.map((p,i)=>`<div class="agrow">
+      ${p.img?`<img src="${esc(p.img)}" alt="" style="height:30px;max-width:76px;object-fit:contain;flex:none">`:''}
+      <div class="qd">
+        <div class="cab">${esc(p.rotulo||'APOIO')}</div>
+        <div class="du">${esc(p.nome||'—')}</div>
+      </div>
+      <button class="x" data-p="${i}">TIRAR</button>
+    </div>`).join('') : '<div class="body-sm">Nenhum patrocinador ainda.</div>';
+  $('spLista').querySelectorAll('.x').forEach(b=>b.onclick=()=>tirarPatrocinio(Number(b.dataset.p)));
+}
+function tirarPatrocinio(i){
+  if(!M||!Array.isArray(M.patrocinios)) return;
+  M.patrocinios.splice(i,1);
+  gravarPatrocinios(M.patrocinios); M.v++; pintarControle(); publicar();
+}
+
+function tirarDaFila(i){
+  if(!M||!Array.isArray(M.agenda)) return;
+  M.agenda.splice(i,1);
+  gravarAgenda(M.agenda); M.v++; pintarControle(); publicar();
+}
+
+function pintarControle(){
+  const m=M;
+  pintarEscala();
+  pintarAgendaLista(m.agenda);
+  pintarPatrocinios(m.patrocinios);
+  $('liveMeta').textContent=[m.cat,m.fase].filter(Boolean).join(' · ').toUpperCase()||'PARTIDA';
+  const t=tensao(m);
+  $('liveState').textContent = m.status==='finished' ? 'ENCERRADA'
+    : m.inTb ? (m.superSet?'SUPER TIEBREAK':'TIEBREAK') : (t?t.big:'');
+  $('lb1').textContent=nome(m.t1); $('lb2').textContent=nome(m.t2);
+  $('lp1').textContent=m.inTb?m.tb1:(m.p1>3?'AD':PTS[Math.min(m.p1,3)]);
+  $('lp2').textContent=m.inTb?m.tb2:(m.p2>3?'AD':PTS[Math.min(m.p2,3)]);
+  $('lg1').textContent='SETS '+m.s1+' · GAMES '+m.g1;
+  $('lg2').textContent='SETS '+m.s2+' · GAMES '+m.g2;
+  const sq=saqueDoTime(m);
+  $('ls1').textContent=sq===1&&m.status==='playing'?'SACANDO':'';
+  $('ls2').textContent=sq===2&&m.status==='playing'?'SACANDO':'';
+  $('tap1').classList.toggle('lead',sq===1&&m.status==='playing');
+  $('tap2').classList.toggle('lead',sq===2&&m.status==='playing');
+  $('btnUndo').disabled=!hist.length;
+
+  // quem saca: um botão por jogador
+  const todos=[...m.t1,...m.t2];
+  $('srvgrid').innerHTML=todos.map((n,i)=>
+    `<button class="srvb ${m.saque===i?'on':''}" data-s="${i}">${esc(n)}</button>`).join('');
+  $('srvgrid').querySelectorAll('.srvb').forEach(b=>b.onclick=()=>{
+    hist.push(JSON.stringify(M)); M.saque=Number(b.dataset.s); M.v++; pintarControle(); publicar(); });
+
+  // ajustes
+  $('ajN1').textContent=nome(m.t1); $('ajN2').textContent=nome(m.t2);
+  $('ajSets').textContent=m.s1+'-'+m.s2;
+
+  // cena ativa
+  const cena=m.cena||'placar';
+  document.querySelectorAll('.cenab').forEach(b=>b.classList.toggle('on',b.dataset.c===cena));
+}
+function esc(s){ return String(s??'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ajuste manual: mexe direto no placar, sem passar pelas regras
+function ajustar(cod){
+  hist.push(JSON.stringify(M));
+  const alvo=cod.slice(0,2), sinal=cod.slice(2)==='+'?1:-1;
+  const lim=(v,max)=>Math.max(0,Math.min(max,v));
+  if(M.inTb){
+    if(alvo==='p1') M.tb1=lim(M.tb1+sinal,99);
+    if(alvo==='p2') M.tb2=lim(M.tb2+sinal,99);
+  } else {
+    if(alvo==='p1') M.p1=lim(M.p1+sinal,4);
+    if(alvo==='p2') M.p2=lim(M.p2+sinal,4);
+  }
+  if(alvo==='g1') M.g1=lim(M.g1+sinal,99);
+  if(alvo==='g2') M.g2=lim(M.g2+sinal,99);
+  if(alvo==='s1') M.s1=lim(M.s1+sinal,9);
+  if(alvo==='s2') M.s2=lim(M.s2+sinal,9);
+  // se o ajuste tirou a partida do fim, ela volta a rodar
+  if(M.status==='finished' && M.s1<precisaSets(M) && M.s2<precisaSets(M)){
+    M.status='playing'; M.vencedor=null; M.fimEm=null;
+  }
+  // e o placar corrigido é relido: 6—6 liga o tiebreak, sair dele desliga
+  if(alvo==='g1'||alvo==='g2') conferirTiebreak(M);
+  M.evento=null; M.v++;
+  pintarControle(); publicar();
+}
+function setCena(c){ M.cena=c; M.v++; pintarControle(); publicar(); }
+
+async function iniciar(){
+  const t1=[$('a1').value.trim(),$('a2').value.trim()].filter(Boolean);
+  const t2=[$('b1').value.trim(),$('b2').value.trim()].filter(Boolean);
+  if(t1.length<1||t2.length<1){ aviso('Preenche pelo menos um nome de cada dupla.'); return; }
+  const btn=$('btnStart'); btn.disabled=true; btn.textContent='Criando…';
+  try{
+    if(!supa) throw new Error('A biblioteca do Supabase não carregou. Verifique a internet.');
+    const {data,error}=await supa.rpc('bc_create');
+    if(error){
+      console.error('[LevelBT] bc_create',error);
+      const bruto=[error.message,error.details,error.hint,error.code].filter(Boolean).join(' · ');
+      throw new Error('bc_create → '+(bruto||'erro sem mensagem'));
+    }
+    const r=Array.isArray(data)?data[0]:data;
+    if(!r||!r.token) throw new Error('O banco respondeu sem token. Rode o placar-supabase.sql de novo.');
+    tokenPub=r.token; ctrlKey=r.control_key;
+    try{ localStorage.setItem('lbt_bc',JSON.stringify({token:tokenPub,key:ctrlKey})); }catch(e){}
+  }catch(e){
+    aviso(e.message||'Não consegui criar a transmissão.');
+    btn.disabled=false; btn.textContent='Gerar placar e link do OBS'; return;
+  }
+  definirPartida(novaPartida({t1,t2,cat:$('cat').value.trim(),fase:$('fase').value.trim(),
+                 torneio:$('torneio').value.trim(),quadra:$('quadra').value.trim(),patrocinador:$('patroc').value.trim(),
+                 alvo:cfg.alvo,tbPts:cfg.tbPts,nSets:cfg.nSets,
+                 agenda:lerAgenda(), patrocinios:lerPatrocinios()}));  // atravessam as partidas
+  const url=location.origin+location.pathname+'?overlay='+tokenPub;
+  $('ovUrl').value=url;
+  $('setup').classList.add('hidden');
+  $('linkbox').classList.remove('hidden');
+  $('live').classList.remove('hidden');
+  atualizarVoltar();
+  pintarControle(); publicar();
+}
+function aviso(t){ const e=$('setupMsg'); e.textContent=t; e.style.display='block'; }
+
+async function tentarRetomar(){
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem('lbt_bc')||'null'); }catch(e){}
+  if(!s||!s.token||!s.key) return false;
+  try{
+    const {data}=await supa.rpc('bc_read',{p_token:s.token});
+    if(!data||!data.t1) return false;
+    definirPartida(data); ctrlKey=s.key; tokenPub=s.token;
+    $('ovUrl').value=location.origin+location.pathname+'?overlay='+tokenPub;
+    $('setup').classList.add('hidden');
+    $('live').classList.remove('hidden');
+    pintarControle();
+    $('syncMsg').textContent='Partida retomada · '+nome(M.t1)+' × '+nome(M.t2);
+    return true;
+  }catch(e){ return false; }
+}
+
+function ligarControle(){
+  segs();
+  $('btnStart').onclick=iniciar;
+  $('btnDemo').onclick=()=>window.open(location.origin+location.pathname+'?overlay=demo','_blank');
+  $('tap1').onclick=()=>{pontoPara(M,1);pintarControle();publicar();};
+  $('tap2').onclick=()=>{pontoPara(M,2);pintarControle();publicar();};
+  $('btnUndo').onclick=()=>{ if(!hist.length)return; M=JSON.parse(hist.pop()); M.v++; pintarControle(); publicar(); };
+  $('btnLink').onclick=()=>{ $('linkbox').classList.toggle('hidden'); atualizarVoltar(); };
+  document.querySelectorAll('.cenab[data-c]').forEach(b=>b.onclick=()=>setCena(b.dataset.c));
+  $('btnReplay').onclick=()=>{
+    M.replayEm=Date.now(); M.v++; publicar();
+    const b=$('btnReplay'), t=b.textContent;
+    b.disabled=true; b.textContent='NO AR…';
+    setTimeout(()=>{ b.disabled=false; b.textContent=t; }, REPLAY_MS);
+  };
+  $('spArq').onchange=async e=>{
+    const arq=e.target.files&&e.target.files[0];
+    e.target.value='';                              // permite reenviar o mesmo arquivo
+    const erro=validarLogo(arq);
+    if(erro){ $('spMsg').textContent=erro.toUpperCase(); return; }
+    $('spMsg').textContent='ENVIANDO…';
+    try{
+      const url=await enviarLogo(arq);
+      if(!Array.isArray(M.patrocinios)) M.patrocinios=[];
+      M.patrocinios.push({
+        nome:   $('spNome').value.trim() || arq.name.replace(/\.[^.]*$/,''),
+        rotulo: ($('spRotulo').value.trim() || 'APOIO').toUpperCase(),
+        img:    url
+      });
+      gravarPatrocinios(M.patrocinios); M.v++;
+      $('spNome').value=''; $('spRotulo').value='';
+      pintarControle(); publicar();
+      $('spMsg').textContent='LOGO NO AR';
+    }catch(err){
+      console.error('[LevelBT] logo',err);
+      $('spMsg').textContent=String(err.message||err);
+    }
+  };
+  $('btnAgdCola').onclick=()=>{
+    const novos=lerPlanilha($('agdCola').value);
+    if(!novos.length){ $('agdMsg').textContent='NÃO ENCONTREI NENHUM JOGO NO QUE VOCÊ COLOU'; return; }
+    if(!Array.isArray(M.agenda)) M.agenda=[];
+    M.agenda=M.agenda.concat(novos);
+    gravarAgenda(M.agenda); M.v++;
+    $('agdCola').value='';
+    pintarControle(); publicar();
+    $('agdMsg').textContent=novos.length+(novos.length===1?' JOGO LIDO':' JOGOS LIDOS')+' DA PLANILHA';
+  };
+  $('btnAgdAdd').onclick=()=>{
+    const j=novoJogo($('agHora').value,$('agCtx').value,$('agA').value,$('agB').value);
+    if(!jogoValido(j)){ $('agdMsg').textContent='FALTA O NOME DE UMA DUPLA'; return; }
+    if(!Array.isArray(M.agenda)) M.agenda=[];
+    M.agenda.push(j);
+    gravarAgenda(M.agenda); M.v++;
+    // hora e categoria costumam repetir entre jogos: só as duplas se limpam
+    $('agA').value=''; $('agB').value=''; $('agA').focus();
+    pintarControle(); publicar();
+  };
+  // Enter em qualquer campo adiciona
+  ['agHora','agCtx','agA','agB'].forEach(id=>$(id).addEventListener('keydown',e=>{
+    if(e.key==='Enter'){ e.preventDefault(); $('btnAgdAdd').click(); }
+  }));
+  document.querySelectorAll('.adjb').forEach(b=>b.onclick=()=>ajustar(b.dataset.a));
+  $('btnNova').onclick=()=>{
+    if(!confirm('Começar uma transmissão nova? A atual para de ser atualizada.')) return;
+    try{ localStorage.removeItem('lbt_bc'); }catch(e){}
+    M=null; ctrlKey=null; tokenPub=null; hist=[];
+    $('live').classList.add('hidden'); $('linkbox').classList.add('hidden');
+    $('setup').classList.remove('hidden');
+    ['a1','a2','b1','b2','cat','fase','quadra','patroc'].forEach(id=>{ const e=$(id); if(e) e.value=''; });
+    const btn=$('btnStart'); btn.disabled=false; btn.textContent='Gerar placar e link do OBS';
+    $('setupMsg').style.display='none';
+    window.scrollTo(0,0);
+  };
+  $('btnEnd').onclick=()=>{ if(!confirm('Encerrar a partida?'))return; hist.push(JSON.stringify(M));
+    M.status='finished'; M.vencedor=(M.s1>M.s2)?1:(M.s2>M.s1?2:(M.g1>=M.g2?1:2));
+    M.evento={t:'FIM',time:M.vencedor}; M.v++; pintarControle(); publicar(); };
+  $('btnCopy').onclick=async()=>{ try{ await navigator.clipboard.writeText($('ovUrl').value);
+      $('btnCopy').textContent='Copiado'; setTimeout(()=>$('btnCopy').textContent='Copiar link',1600);
+    }catch(e){ $('ovUrl').select(); } };
+  $('btnOpen').onclick=()=>window.open($('ovUrl').value,'_blank');
+  setInterval(()=>{ if(M) $('liveTempo').textContent='· '+relogio(M); },1000);
+
+  // A marca leva para o app. Se houver transmissão no ar, pergunta antes:
+  // sair da página no meio de um jogo é o tipo de tropeço que não dá
+  // para desfazer no meio de um torneio.
+  $('btnInicio').onclick=irParaOrigem;
+
+  // "Voltar" só aparece quando há de onde voltar: com uma partida no ar,
+  // ele recolhe a caixa do link e devolve o painel.
+  $('btnVoltar').onclick=()=>{
+    $('linkbox').classList.add('hidden');
+    window.scrollTo(0,0);
+    atualizarVoltar();
+  };
+  ligarLayoutPC();
+}
+
+// A marca volta ao começo: recolhe a caixa do link e sobe a página.
+// Este produto vive sozinho — não há app nenhum para onde ir.
+// Devolve se saiu ou não — assim dá para testar a decisão sem depender
+// de o navegador realmente trocar de página.
+function irParaOrigem(){
+  $('linkbox').classList.add('hidden');
+  atualizarVoltar();
+  window.scrollTo(0,0);
+  return true;
+}
+
+function atualizarVoltar(){
+  const b=$('btnVoltar'); if(!b) return;
+  b.classList.toggle('hidden', $('linkbox').classList.contains('hidden'));
+}
+
+// ── Computador ────────────────────────────────────────────────────
+const PC_MIN=1040;
+function ehPC(){ return innerWidth>=PC_MIN; }
+
+// No computador as gavetas do painel ficam abertas: o operador precisa
+// ver o jogo, as cenas e a fila de uma vez. A gaveta de colar planilha
+// é a única que continua fechada, porque só se usa uma vez.
+function ajustarGavetas(){
+  document.querySelectorAll('#live .cln > details').forEach(d=>{ d.open = ehPC(); });
+}
+
+// Atalhos: quem opera está com as duas mãos no teclado, ao lado do OBS.
+const ATALHOS={
+  a:()=>$('tap1').click(),          // ponto para a dupla de cima
+  l:()=>$('tap2').click(),          // ponto para a dupla de baixo
+  z:()=>$('btnUndo').click(),       // desfazer
+  r:()=>$('btnReplay').click(),     // vinheta de replay
+  p:()=>setCena('placar'),
+  o:()=>setCena('oculto')
+};
+function ligarLayoutPC(){
+  ajustarGavetas();
+  addEventListener('resize', ajustarGavetas);
+  addEventListener('keydown', e=>{
+    if(!ehPC() || !M) return;
+    if(e.metaKey||e.ctrlKey||e.altKey) return;
+    // não rouba tecla de quem está digitando
+    const alvo=e.target, tag=alvo&&alvo.tagName;
+    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(alvo&&alvo.isContentEditable)) return;
+    if($('live').classList.contains('hidden')) return;
+    const fn=ATALHOS[e.key.toLowerCase()];
+    if(fn){ e.preventDefault(); fn(); }
+  });
+}
+
+// ══════════════ BOOT ══════════════
+if(OVERLAY_TOKEN){
+  document.body.classList.add('ov');
+  $('stage').classList.remove('hidden');
+  escalar(); addEventListener('resize',escalar);
+  // o relógio anda sozinho, sem depender da próxima resposta do banco
+  setInterval(()=>{ const el=$('ovTempo'); if(el&&ultimoM) el.textContent=relogio(ultimoM); },1000);
+  if(OVERLAY_TOKEN==='demo') loopDemo(); else loopOverlay();
+}else{
+  $('ctrl').classList.remove('hidden');
+  ligarControle();
+  // se havia uma partida em andamento neste aparelho, oferece retomar
+  (async()=>{
+    let s=null; try{ s=JSON.parse(localStorage.getItem('lbt_bc')||'null'); }catch(e){}
+    if(!s||!s.token) return;
+    const box=document.createElement('div');
+    box.className='warn'; box.style.marginBottom='16px';
+    box.innerHTML='<div style="margin-bottom:10px">Tem uma partida em andamento neste aparelho.</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button class="btn btn-p" style="padding:10px 16px;font-size:15px" id="btnRet">Retomar</button>'+
+      '<button class="btn btn-q" style="padding:9px 16px;font-size:15px" id="btnDescartar">Começar nova</button></div>';
+    $('setup').prepend(box);
+    $('btnRet').onclick=async()=>{ $('btnRet').textContent='Carregando…';
+      const ok=await tentarRetomar(); if(!ok){ $('btnRet').textContent='Não consegui retomar'; } };
+    $('btnDescartar').onclick=()=>{ localStorage.removeItem('lbt_bc'); box.remove(); };
+  })();
+}
+</script>
+</body>
+</html>
