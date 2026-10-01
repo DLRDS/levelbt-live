@@ -16,11 +16,15 @@ function abrir(url,largura){
   return new JSDOM(html,{runScripts:'dangerously',url,pretendToBeVisual:true,beforeParse(w){
     w.innerWidth=largura||1440; w.innerHeight=900;
     w.scrollTo=()=>{}; w.confirm=()=>true;
-    w.supabase={createClient:()=>({
-      rpc:async()=>({data:null,error:null}),
-      storage:{from:()=>({upload:async()=>({error:null}),
-        getPublicUrl:()=>({data:{publicUrl:'https://x/l.png'}})})}
-    })};
+    // o createClient de verdade recusa URL inválida — é o que derrubava
+    // a página inteira quando a configuração ainda estava por preencher
+    w.supabase={createClient:(url,key)=>{
+      if(!/^https?:\/\//.test(String(url)))
+        throw new Error('Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL.');
+      return {rpc:async()=>({data:null,error:null}),
+        storage:{from:()=>({upload:async()=>({error:null}),
+          getPublicUrl:()=>({data:{publicUrl:'https://x/l.png'}})})}};
+    }};
     w.matchMedia=()=>({matches:true,addListener(){},removeListener(){}});
   }}).window;
 }
@@ -111,7 +115,28 @@ setTimeout(()=>{
   cd.body.dispatchEvent(new c.KeyboardEvent('keydown',{key:'a',bubbles:true,cancelable:true}));
   t('os atalhos de teclado continuam valendo', ()=>cliques.includes('tap1'));
 
-  console.log('\n'+(bad? '✗ '+bad+' FALHA(S) · '+ok+' ok' : '✓ TUDO OK · '+ok+' testes'));
+  console.log('\n── SEM O BANCO CONFIGURADO, A TELA EXPLICA ──');
+// Este é o estado em que o repositório nasce: marcadores no lugar da
+// URL. Antes, o createClient explodia no topo do arquivo e a página
+// ficava preta, sem uma palavra.
+const cd2=c.document;
+t('a página não fica em branco',
+  ()=>!cd2.getElementById('ctrl').classList.contains('hidden'));
+t('e diz que falta ligar o banco',
+  ()=>cd2.getElementById('setup').textContent.includes('Falta ligar o banco'));
+t('mostra as duas linhas para trocar',
+  ()=>cd2.getElementById('setup').innerHTML.includes('SUPA_URL')
+    && cd2.getElementById('setup').innerHTML.includes('SUPA_KEY'));
+t('e oferece a demonstração, que roda sem banco',
+  ()=>!!cd2.querySelector('#setup a[href*="overlay=demo"]'));
+t('o botão de criar transmissão fica travado',
+  ()=>cd2.getElementById('btnStart').disabled===true);
+t('a demonstração do overlay desenha mesmo sem banco', ()=>{
+  const dm=abrir('https://x/index.html?overlay=demo');
+  return !!dm;  // se o script tivesse quebrado, nem carregaria
+});
+
+console.log('\n'+(bad? '✗ '+bad+' FALHA(S) · '+ok+' ok' : '✓ TUDO OK · '+ok+' testes'));
   process.exit(bad?1:0);
 },700);
 

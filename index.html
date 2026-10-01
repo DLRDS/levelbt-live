@@ -702,7 +702,23 @@
 // Este é o banco DA TRANSMISSÃO. Não é o mesmo do app Level BT.
 const SUPA_URL='COLE_AQUI_A_URL_DO_PROJETO';
 const SUPA_KEY='COLE_AQUI_A_CHAVE_PUBLICA';
-const supa = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY) : null;
+
+// createClient explode com URL inválida — e, como isto roda no topo do
+// arquivo, uma explosão aqui derruba o script inteiro e a página fica
+// preta, sem dizer nada. Então a conexão é tentada com rede de proteção
+// e a falha vira um aviso na tela.
+let supa=null, ERRO_CONFIG='';
+(function(){
+  const faltaPreencher = SUPA_URL.indexOf('COLE_AQUI')===0 || SUPA_KEY.indexOf('COLE_AQUI')===0;
+  if(faltaPreencher){
+    ERRO_CONFIG='falta-config';
+  } else if(!window.supabase){
+    ERRO_CONFIG='A biblioteca do Supabase não carregou. Verifique a internet e recarregue.';
+  } else {
+    try{ supa=window.supabase.createClient(SUPA_URL, SUPA_KEY); }
+    catch(e){ ERRO_CONFIG='Não consegui conectar ao banco: '+(e.message||e); }
+  }
+})();
 
 const PTS=['0','15','30','40'];
 const $=id=>document.getElementById(id);
@@ -1685,6 +1701,38 @@ function irParaOrigem(){
   return true;
 }
 
+// Página preta não ensina nada. Se o banco não estiver configurado,
+// a tela diz exatamente o que falta e onde.
+function avisarConfig(){
+  if(!ERRO_CONFIG) return;
+  const box=document.createElement('div');
+  box.className='warn';
+  box.style.marginBottom='18px';
+  box.innerHTML = ERRO_CONFIG==='falta-config'
+    ? '<div style="font-weight:700;margin-bottom:8px">Falta ligar o banco</div>'+
+      '<div style="margin-bottom:10px">Abra o <code>index.html</code> e troque as duas linhas '+
+      'de configuração pelos dados do seu projeto no Supabase '+
+      '(Settings → API):</div>'+
+      '<div class="mono" style="line-height:1.9;text-transform:none;color:var(--white)">'+
+      "const SUPA_URL='https://SEU-PROJETO.supabase.co';<br>"+
+      "const SUPA_KEY='sb_publishable_...';</div>"+
+      '<div style="margin-top:10px">Enquanto isso, a demonstração do overlay funciona sem banco:</div>'
+    : '<div style="font-weight:700;margin-bottom:8px">Não consegui conectar</div>'+
+      '<div>'+esc(ERRO_CONFIG)+'</div>';
+
+  if(ERRO_CONFIG==='falta-config'){
+    const a=document.createElement('a');
+    a.href=location.pathname+'?overlay=demo';
+    a.target='_blank';
+    a.className='btn btn-q';
+    a.style.marginTop='12px';
+    a.textContent='Ver demonstração do overlay';
+    box.appendChild(a);
+  }
+  $('setup').prepend(box);
+  $('btnStart').disabled=true;
+}
+
 function atualizarVoltar(){
   const b=$('btnVoltar'); if(!b) return;
   b.classList.toggle('hidden', $('linkbox').classList.contains('hidden'));
@@ -1736,6 +1784,7 @@ if(OVERLAY_TOKEN){
 }else{
   $('ctrl').classList.remove('hidden');
   ligarControle();
+  avisarConfig();
   // se havia uma partida em andamento neste aparelho, oferece retomar
   (async()=>{
     let s=null; try{ s=JSON.parse(localStorage.getItem('lbt_bc')||'null'); }catch(e){}
