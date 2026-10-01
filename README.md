@@ -8,7 +8,8 @@ endereço, outro banco. Os dois não conversam.
 
 ```
 index.html     o produto inteiro — controle e overlay no mesmo arquivo
-banco.sql      tudo que o Supabase precisa, para rodar uma vez só
+banco.sql      transmissões e painel, para rodar uma vez no SQL Editor
+LOGOS.md       as logos, que se configuram pelo painel e não por SQL
 GUIA-OBS.md    como ligar no OBS
 testes/        node testes/placar.js
 ```
@@ -36,6 +37,13 @@ placar, e quem marca nunca precisa de login.
 do PASSO 2, no fim do arquivo, e guarde a chave de painel que ele
 devolver.
 
+> O SQL Editor roda o arquivo como **uma transação só**. Se qualquer
+> comando falhar, tudo é desfeito — inclusive o que já tinha passado.
+> Um erro de "relation não existe" logo depois costuma ser isso.
+
+**2b.** Siga o `LOGOS.md` para habilitar o envio de logos. São dois
+cliques no painel; não dá para fazer por SQL.
+
 **3.** Em Settings → API, copie a URL e a chave pública (`anon`). Abra o
 `index.html` e troque as duas primeiras linhas da configuração:
 
@@ -57,7 +65,7 @@ estão trancadas e todo acesso passa por funções que decidem o que cada
 um pode ver. A chave sozinha não abre nada.
 
 A exceção consciente é o balde de logos, que aceita envio sem login.
-O `banco.sql` explica o porquê e o que limita o estrago.
+O `LOGOS.md` explica o porquê e o que limita o estrago.
 
 ## No dia do torneio
 

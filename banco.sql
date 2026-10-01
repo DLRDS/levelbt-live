@@ -5,8 +5,15 @@
 -- são dois projetos separados no Supabase, de propósito.
 --
 -- Rode este arquivo UMA VEZ, inteiro, no SQL Editor do projeto novo.
--- Ele cria tudo: transmissões, logos de patrocinador e o painel.
--- É seguro rodar de novo se precisar.
+-- Ele cria as transmissões e o painel. É seguro rodar de novo.
+--
+-- As logos dos patrocinadores NÃO estão aqui de propósito: o Supabase
+-- não deixa mais mexer no storage pelo SQL Editor. Elas se configuram
+-- em dois cliques no painel — veja LOGOS.md.
+--
+-- ⚠ O Supabase roda o arquivo como UMA TRANSAÇÃO SÓ: se um comando
+-- falhar, tudo é desfeito, inclusive o que já tinha passado. Se der
+-- erro, conserte o comando apontado e rode o arquivo inteiro de novo.
 --
 -- Depois de rodar, vá ao PASSO 2 no fim do arquivo.
 -- ══════════════════════════════════════════════════════════════════
@@ -90,44 +97,7 @@ grant execute on function bc_write(text, jsonb) to anon, authenticated;
 
 
 -- ══════════════════════════════════════════════════════════════════
--- 2 · LOGOS DOS PATROCINADORES
---
--- ⚠ LEIA ANTES
--- Este balde é PÚBLICO para leitura — tem que ser, o OBS busca a
--- imagem sem login — e aceita ENVIO SEM LOGIN. Ou seja: quem ler o
--- código da página encontra a chave pública e consegue enviar imagens
--- para cá.
---
--- O que limita o estrago: só imagens (png, jpeg, webp), 2 MB por
--- arquivo, balde isolado, e nada entra no ar sozinho — só aparece a
--- logo que você escolher na página do placar.
---
--- SVG ficou de fora de propósito: é um documento que pode carregar
--- script dentro. PNG e JPEG não.
--- ══════════════════════════════════════════════════════════════════
-
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('logos', 'logos', true, 2097152,
-        array['image/png','image/jpeg','image/webp'])
-on conflict (id) do update
-  set public             = true,
-      file_size_limit    = 2097152,
-      allowed_mime_types = array['image/png','image/jpeg','image/webp'];
-
-drop policy if exists "logos leitura publica" on storage.objects;
-create policy "logos leitura publica"
-  on storage.objects for select
-  using (bucket_id = 'logos');
-
-drop policy if exists "logos envio" on storage.objects;
-create policy "logos envio"
-  on storage.objects for insert
-  to anon, authenticated
-  with check (bucket_id = 'logos');
-
-
--- ══════════════════════════════════════════════════════════════════
--- 3 · PAINEL
+-- 2 · PAINEL
 --
 -- Dá ao dono da plataforma a visão que o RLS esconde: quais
 -- transmissões existem e quais estão no ar agora. Protegido por uma
@@ -216,9 +186,6 @@ notify pgrst, 'reload schema';
 --
 --   select * from bc_create();          -- deve devolver duas chaves
 --   select admin_lives('SUA_CHAVE');    -- deve devolver um JSON
---
---   select id, public, file_size_limit, allowed_mime_types
---     from storage.buckets where id = 'logos';
 --
 -- Se o app disser que uma função "não existe" mas ela aparece aqui,
 -- é o cache da API. Rode:   notify pgrst, 'reload schema';
