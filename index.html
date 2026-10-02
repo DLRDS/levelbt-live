@@ -31,41 +31,163 @@
      Quem opera a transmissão está sentado na frente do OBS, com espaço
      de sobra. Aqui o painel abre em três colunas e as gavetas ficam
      abertas: dá para ver o jogo, as cenas e a fila ao mesmo tempo,
-     sem abrir e fechar nada. */
-  @media (min-width:1040px){
-    body{font-size:16px;}
-    .wrap{max-width:1280px;padding-top:28px;}
-    #setup, #linkbox{max-width:560px;margin-left:auto;margin-right:auto;}
+     sem abrir e fechar nada.
 
-    .painel{display:grid;grid-template-columns:1.1fr 1fr 1.15fr;gap:16px;align-items:start;}
-    .cln{background:var(--surf);border-radius:24px;padding:18px;gap:14px;}
+     O modo é decidido no JS — pela largura da tela, ou pela escolha
+     forçada no botão — e sai como classe no <html>. Por isso estas
+     regras são de classe e não de @media: media query não dá para
+     ligar e desligar na mão. O celular segue sendo o padrão do arquivo
+     inteiro; aqui só existe o que o computador acrescenta. */
+  .modo-pc body{font-size:16px;}
+  /* min-width: forçar computador num celular mostra o layout de verdade
+     e rola na horizontal, como o "ver versão para computador" do
+     navegador. Sem isso tudo se esmaga e os textos se montam. */
+  .modo-pc .wrap{max-width:1280px;min-width:1000px;padding-top:28px;}
+  .modo-pc #setup, .modo-pc #linkbox{max-width:560px;margin-left:auto;margin-right:auto;}
 
-    /* as duas duplas lado a lado, como um placar de verdade */
-    .taps{flex-direction:row;}
-    .taps .tap{flex:1;}
-    .tap .big{font-size:56px;}
+  /* ── A MESA ───────────────────────────────────────────────────
+     O preview manda: grande, à esquerda, é por ele que se decide
+     tudo. Embaixo dele a botoeira de cenas. À direita, colada, a
+     pontuação — que é o que a mão faz o tempo todo. O resto desce
+     para o rodapé, onde só se mexe entre uma partida e outra. */
+  /* Posição explícita em vez de áreas nomeadas: linha e coluna de cada
+     bloco, sem depender de como o navegador casa os nomes. */
+  .modo-pc .painel{display:grid;gap:14px;align-items:start;
+    grid-template-columns:minmax(0,1.85fr) minmax(0,1fr);}
+  .modo-pc .area-tv   {grid-column:1; grid-row:1;}
+  .modo-pc .area-mesa {grid-column:1; grid-row:2;}
+  .modo-pc .area-pts  {grid-column:2; grid-row:1 / span 2;}
+  /* patrocinadores e fila são assuntos diferentes: cada um no seu
+     cartão, lado a lado no rodapé */
+  .modo-pc .area-patro{grid-column:1; grid-row:3;}
+  .modo-pc .area-fila {grid-column:2; grid-row:3;}
 
-    /* dentro das colunas, as gavetas viram seções com título */
-    .cln details{background:transparent;border:none;border-radius:0;padding:0;}
-    .cln details+details{border-top:1.5px solid var(--line);padding-top:14px;}
-    .cln summary{list-style:none;cursor:default;pointer-events:none;
-      font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.16em;
-      text-transform:uppercase;color:var(--label);margin-bottom:12px;}
-    .cln summary::-webkit-details-marker{display:none;}
-    /* a de colar planilha continua sendo uma gaveta de verdade */
-    .cln details details summary{pointer-events:auto;cursor:pointer;color:var(--orange);}
+  /* o preview não é um cartão entre outros: é a tela */
+  .modo-pc .area-tv{background:none;border:none;padding:0;gap:10px;}
+  .modo-pc .area-tv .tv{border-width:2px;border-radius:8px;}
 
-    .agdLista, #agdLista{max-height:340px;overflow-y:auto;}
-    .cenas{grid-template-columns:1fr 1fr;}
-  }
+  /* a pontuação ocupa a altura toda da coluna, empilhada */
+  .modo-pc .area-pts .taps{flex-direction:column;}
+  .modo-pc .area-pts .tap{padding:20px;}
+  .modo-pc .area-pts .tap .big{font-size:72px;line-height:.85;}
+  .modo-pc .area-pts .tap .mono{font-size:12px;}
 
-  /* Atalhos de teclado, mostrados só quando há teclado de verdade */
+  /* no rodapé as gavetas já são a própria seção: sem borda entre elas */
+  .modo-pc .area-patro details+details,
+  .modo-pc .area-fila  details+details{border-top:none;padding-top:0;}
+  .modo-pc .cln{background:var(--surf);border-radius:24px;padding:18px;gap:14px;}
+
+  /* a etiqueta do atalho não pode empurrar o placar para outra linha */
+  .modo-pc .taps .mono{white-space:nowrap;}
+  .modo-pc .taps .tecla{margin-left:6px;}
+
+  /* dentro das colunas, as gavetas viram seções com título */
+  .modo-pc .cln details{background:transparent;border:none;border-radius:0;padding:0;}
+  .modo-pc .cln details+details{border-top:1.5px solid var(--line);padding-top:14px;}
+  .modo-pc .cln summary{list-style:none;cursor:default;pointer-events:none;
+    font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--label);margin-bottom:12px;}
+  .modo-pc .cln summary::-webkit-details-marker{display:none;}
+  /* a de colar planilha continua sendo uma gaveta de verdade */
+  .modo-pc .cln details details summary{pointer-events:auto;cursor:pointer;color:var(--orange);}
+
+  .modo-pc #agdLista{max-height:340px;overflow-y:auto;}
+  .modo-pc .cenas{grid-template-columns:1fr 1fr;}
+
+  /* Atalhos de teclado: só fazem sentido com teclado de verdade */
   .tecla{display:none;}
-  @media (min-width:1040px){
-    .tecla{display:inline-block;font-family:var(--fm);font-size:10px;font-weight:700;
-      letter-spacing:.1em;border:1.5px solid var(--line);border-radius:6px;
-      padding:2px 6px;color:var(--dim);margin-left:8px;vertical-align:middle;}
-  }
+  .modo-pc .tecla{display:inline-block;font-family:var(--fm);font-size:10px;font-weight:700;
+    letter-spacing:.1em;border:1.5px solid var(--line);border-radius:6px;
+    padding:2px 6px;color:var(--dim);margin-left:8px;vertical-align:middle;}
+
+  /* ── PREVIEW DA LIVE ──────────────────────────────────────────
+     Uma caixa 16:9 com o vídeo do YouTube embaixo e o overlay de
+     verdade por cima, na mesma proporção do que vai ao ar. O overlay
+     é o próprio arquivo rodando em modo overlay — então é exatamente
+     o que o OBS recebe, não uma imitação. */
+  .tv{position:relative;width:100%;aspect-ratio:16/9;background:#000;
+    border:1.5px solid var(--line);border-radius:10px;overflow:hidden;}
+  .tv-vazio{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    padding:22px;text-align:center;font-size:14px;color:var(--dim);line-height:1.5;}
+  .tv-video{position:absolute;inset:0;width:100%;height:100%;border:0;}
+  /* o overlay não recebe clique: é vidro, não botão */
+  .tv-over{position:absolute;inset:0;pointer-events:none;}
+  .tv-over-f{width:1920px;height:1080px;border:0;transform-origin:top left;background:transparent;}
+  .lnk{background:none;border:none;color:var(--orange);cursor:pointer;padding:0;}
+
+  /* ── BARRA DE STATUS ──────────────────────────────────────────
+     No celular é uma linha de texto; no computador vira a régua de
+     estado de uma mesa de corte: no ar, partida, tempo e cena. */
+  .barra{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+  .barra-sep{display:none;}
+  .barra-fim{margin-left:auto;color:var(--orange);}
+  .num-sm{font-family:var(--fm);font-size:13px;font-weight:700;color:var(--white);letter-spacing:.06em;}
+  .sig{display:none;align-items:center;gap:7px;background:var(--orange);color:var(--ink);
+    padding:5px 11px;border-radius:4px;font-family:var(--fm);font-size:11px;
+    font-weight:700;letter-spacing:.14em;}
+  .sig i{width:7px;height:7px;border-radius:999px;background:var(--ink);display:block;
+    animation:vivoPisca 1.4s steps(2,jump-none) infinite;}
+  .sig.frio{background:var(--line);color:var(--dim);}
+  .sig.frio i{background:var(--dim);animation:none;}
+
+  .modo-pc .barra{display:flex;flex-wrap:nowrap;gap:14px;background:var(--surf);
+    border:1.5px solid var(--line);border-radius:8px;padding:10px 14px;margin-bottom:16px;}
+  .modo-pc .sig{display:inline-flex;}
+  .modo-pc .barra-sep{display:block;width:1px;height:18px;background:var(--line);}
+
+  /* ── DENSIDADE DE MESA ────────────────────────────────────────
+     O app de celular usa cantos muito arredondados e bastante ar —
+     é certo no telefone e errado num painel de transmissão, onde se
+     olha tudo de uma vez. No computador os cantos fecham e o espaço
+     aperta, sem mudar nenhuma cor da marca. */
+  .modo-pc .cln{border-radius:8px;padding:14px;gap:12px;}
+  .modo-pc .tap{border-radius:8px;}
+  .modo-pc .cenab{border-radius:5px;padding:11px;}
+  .modo-pc .btn{border-radius:6px;}
+  .modo-pc .seg{border-radius:6px;}
+  .modo-pc .seg button{border-radius:4px;}
+  .modo-pc .input{border-radius:6px;padding:10px 12px;}
+  .modo-pc .agrow{border-radius:6px;}
+  .modo-pc .tv{border-radius:6px;}
+  .modo-pc .panel{border-radius:10px;}
+
+  /* ── BOTOEIRA DE CENAS ────────────────────────────────────────
+     Mesa de corte de verdade: botões lado a lado num barramento só,
+     com luz de tally em cima. A que está no ar acende; as outras
+     ficam apagadas esperando. No celular nada disto vale e a grade
+     de botões continua como era. */
+  .tally{display:none;}
+  .modo-pc .cenas.bus{display:flex;gap:4px;background:var(--ink);
+    border:1.5px solid var(--line);border-radius:6px;padding:4px;}
+  .modo-pc .cenas.bus .cenab{flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:9px;padding:16px 6px 14px;border:none;border-radius:4px;
+    background:var(--surf);font-size:11px;letter-spacing:.14em;color:var(--label);}
+  .modo-pc .cenas.bus .tally{display:block;width:26px;height:4px;border-radius:2px;
+    background:var(--line);transition:background .12s, box-shadow .12s;}
+  .modo-pc .cenas.bus .cenab:hover{background:#242424;color:var(--white);}
+  .modo-pc .cenas.bus .cenab.on{background:var(--orange);color:var(--ink);font-weight:700;}
+  .modo-pc .cenas.bus .cenab.on .tally{background:var(--ink);
+    box-shadow:0 0 10px rgba(255,102,0,.9);}
+  .modo-pc .cenas.bus .cenab .tecla{border-color:rgba(255,255,255,.18);}
+  .modo-pc .cenas.bus .cenab.on .tecla{border-color:rgba(13,13,13,.35);color:rgba(13,13,13,.75);}
+
+  /* o replay é disparo, não cena: fica fora do barramento */
+  .modo-pc .disparo{width:100%;border:1.5px dashed var(--line);border-radius:6px;
+    padding:13px;background:none;color:var(--label);font-size:11px;letter-spacing:.14em;}
+  .modo-pc .disparo:hover{border-color:var(--orange);color:var(--orange);}
+  .modo-pc .disparo:disabled{opacity:.4;}
+
+  /* o título de cada coluna, como etiqueta de rack */
+  .modo-pc .cln>.stack>.mono:first-child,
+  .modo-pc .cln>.stack>.row>.mono:first-child{color:var(--label);}
+
+  /* botão de alternar a visualização */
+  .btn-vis{display:flex;align-items:center;gap:7px;border:1.5px solid var(--line);
+    border-radius:999px;padding:7px 13px;color:var(--label);background:none;
+    font-family:var(--fm);font-size:11px;font-weight:700;letter-spacing:.12em;
+    cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+  .btn-vis:hover{color:var(--white);border-color:var(--dim);}
+  .btn-vis:active{transform:scale(.96);}
   .lock{display:flex;align-items:center;gap:9px;margin-bottom:20px;}
   .marca{background:none;border:none;padding:0;margin-bottom:20px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   .marca:active{transform:scale(.96);}
@@ -134,7 +256,7 @@
   /* Palco fixo de 1920×1080. Tudo dentro é medido em pixels de Full HD;
      o escalar() só encolhe o conjunto inteiro para caber na janela, então
      a proporção nunca muda. No OBS, com fonte 1920×1080, a escala é 1:1. */
-  .stage{position:fixed;left:0;top:0;width:1920px;height:1080px;transform-origin:top left;--esc:.78;
+  .stage{position:fixed;left:0;top:0;width:1920px;height:1080px;transform-origin:top left;--esc:.6;   /* tamanho do placar na transmissão */
     --pulso:1.7s; --curva:cubic-bezier(.45,0,.55,1);}
   .ov *{font-kerning:none;}
 
@@ -236,6 +358,11 @@
   .ptcol.ouro .pt span{animation:ouroTexto var(--pulso) var(--curva) infinite;}
 
   /* — PÍLULAS ABAIXO DO BUG — */
+  /* Placar e detalhes moram na MESMA âncora: assim a distância entre
+     eles encolhe junto com o resto. Antes eram duas âncoras, cada uma
+     escalando do próprio canto — e quanto menor o placar, maior o
+     buraco entre ele e as pílulas. */
+  .hud-topo{display:flex;flex-direction:column;align-items:flex-start;gap:14px;}
   .pills{display:flex;gap:10px;
     animation:faixaIn .5s cubic-bezier(.2,.8,.2,1) .25s both;}
   .pl{padding:10px 16px;font-family:var(--fm);font-size:24px;letter-spacing:.14em;display:flex;align-items:center;gap:9px;}
@@ -246,6 +373,11 @@
   /* o quarentão é uma tarja discreta logo abaixo do placar, não um selo de tela cheia */
   .pl-ouro{background:var(--ink);color:var(--orange);font-weight:700;letter-spacing:.16em;
     animation:faixaIn .38s cubic-bezier(.2,.8,.2,1);}
+  /* entrada discreta: sobe um nada e aparece, sem chamar atenção */
+  .pl.entra{animation:tempoEntra .55s cubic-bezier(.2,.8,.2,1);}
+  @keyframes tempoEntra{
+    0%  {opacity:0;transform:translateY(7px) scale(.97)}
+    100%{opacity:1;transform:none}}
   .pills.out{animation:faixaOut .35s ease forwards;}
 
   /* — RODAPÉ DE SETS — */
@@ -408,6 +540,7 @@
   <div class="veil" id="ovVeil"></div>
 
   <div class="anc tl" style="left:64px;top:56px">
+  <div class="hud-topo">
   <div class="bug" id="bug">
       <div class="mk">
         <div class="meter" aria-hidden="true"><i class="on" style="height:11px"></i><i class="on" style="height:17px"></i><i class="on" style="height:22px"></i><i style="height:26px"></i></div>
@@ -424,15 +557,13 @@
         <div class="pt" id="ovP1"><span>0</span></div><div class="pt" id="ovP2"><span>0</span></div>
       </div>
     </div>
-  </div>
-
-  <div class="anc tl" style="left:64px;top:216px">
-  <div class="pills" id="ovPills">
+    <div class="pills" id="ovPills">
       <span class="pl pl-live"><i></i>AO VIVO</span>
       <span class="pl pl-dark" id="ovCtx"></span>
-      <span class="pl pl-dark" id="ovTempo">0:00</span>
+      <span class="pl pl-dark hidden" id="ovTempo">0:00</span>
       <span class="pl pl-ouro hidden" id="ovOuro">QUARENTÃO · QUEM FAZ, LEVA</span>
     </div>
+  </div>
   </div>
   <div class="anc bl" style="left:64px;bottom:56px">
   <div class="setline" id="ovSetline"></div>
@@ -513,11 +644,14 @@
 <!-- ════════ CONTROLE (celular) ════════ -->
 <div class="wrap hidden" id="ctrl">
   <div class="row" style="margin-bottom:4px">
-    <button class="lock marca" id="btnInicio" title="Ir para o app Level BT" aria-label="Ir para o app Level BT">
+    <button class="lock marca" id="btnInicio" title="Voltar ao começo" aria-label="Voltar ao começo">
       <div class="meter" aria-hidden="true"><i class="on" style="height:9px"></i><i class="on" style="height:13px"></i><i class="on" style="height:17px"></i><i style="height:20px"></i></div>
       <div class="lock-word">LEVEL<b>BT</b></div>
     </button>
-    <button class="btn btn-q hidden" id="btnVoltar" style="padding:9px 16px;font-size:14px">Voltar</button>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+      <button class="btn btn-q hidden" id="btnVoltar" style="padding:9px 16px;font-size:14px">Voltar</button>
+      <button class="btn-vis" id="btnVis"></button>
+    </div>
   </div>
 
   <!-- SETUP -->
@@ -569,12 +703,25 @@
 
   <!-- MARCADOR -->
   <div id="live" class="hidden">
-    <div class="row" style="margin-bottom:12px">
-      <div class="mono"><span id="liveMeta"></span> <span id="liveTempo" style="color:var(--white)"></span></div>
-      <div class="mono" id="liveState" style="color:var(--orange)"></div>
+    <!-- Barra de status: o estado da transmissão de relance, como numa
+         mesa de corte. No celular ela volta a ser a linha simples. -->
+    <div class="barra">
+      <span class="sig" id="sigAr"><i></i>NO AR</span>
+      <span class="mono" id="liveMeta"></span>
+      <span class="barra-sep"></span>
+      <span class="mono">NO AR</span><span class="num-sm" id="liveNoAr">0:00</span>
+      <span class="barra-sep"></span>
+      <span class="mono">JOGO</span><span class="num-sm" id="liveTempo">—</span>
+      <span class="barra-sep"></span>
+      <span class="mono">CENA</span><span class="num-sm" id="barraCena">PLACAR</span>
+      <span class="barra-fim mono" id="liveState"></span>
     </div>
     <div class="painel">
-    <div class="cln">
+    <!-- A ordem aqui é a do CELULAR: marcar ponto primeiro, que é o
+         que se faz o tempo todo. No computador as áreas do grid
+         reposicionam tudo, sem mexer nesta ordem. -->
+    <div class="cln area-pts">
+      <button class="btn btn-p btn-full" id="btnTempo">Começar o tempo de jogo</button>
     <div class="stack taps" style="gap:8px">
       <button class="tap" id="tap1">
         <div class="row"><div style="font-size:19px;font-weight:700" id="lb1">—</div><div class="big" id="lp1">0</div></div>
@@ -586,6 +733,11 @@
       </button>
     </div>
       <button class="btn btn-q btn-full" id="btnUndo">Desfazer último ponto<span class="tecla">Z</span></button>
+
+      <details>
+        <summary>Quem está sacando</summary>
+        <div class="srvgrid" id="srvgrid"></div>
+      </details>
 
       <details>
         <summary>Corrigir placar</summary>
@@ -604,28 +756,21 @@
         </div>
       </details>
 
-      <details>
-        <summary>Quem está sacando</summary>
-        <div class="srvgrid" id="srvgrid"></div>
-      </details>
     </div>
 
-    <div class="cln">
-      <div class="stack" style="gap:10px">
-        <div class="row"><div class="mono">Tamanho do placar</div><div class="mono" id="escVal"></div></div>
-        <div class="seg" id="segEsc"></div>
-      </div>
-
+    <div class="cln area-mesa">
       <div class="stack" style="gap:10px">
         <div class="mono">O que aparece na transmissão</div>
-        <div class="cenas" id="cenas">
-          <button class="cenab" data-c="placar">PLACAR<span class="tecla">P</span></button>
-          <button class="cenab" data-c="cartela">CARTELA</button>
-          <button class="cenab" data-c="agenda">PRÓXIMOS</button>
-          <button class="cenab" data-c="patroc">PATROCÍNIO</button>
-          <button class="cenab" id="btnReplay" style="grid-column:1/-1">VINHETA DE REPLAY<span class="tecla">R</span></button>
-          <button class="cenab" data-c="oculto" style="grid-column:1/-1">OCULTAR TUDO<span class="tecla">O</span></button>
+        <!-- Barramento de cenas: uma botoeira só, a que está no ar fica
+             acesa. No celular volta a ser a grade de botões de antes. -->
+        <div class="cenas bus" id="cenas">
+          <button class="cenab" data-c="placar"><i class="tally"></i>PLACAR<span class="tecla">P</span></button>
+          <button class="cenab" data-c="cartela"><i class="tally"></i>CARTELA</button>
+          <button class="cenab" data-c="agenda"><i class="tally"></i>PRÓXIMOS</button>
+          <button class="cenab" data-c="patroc"><i class="tally"></i>PATROCÍNIO</button>
+          <button class="cenab" data-c="oculto"><i class="tally"></i>OCULTAR<span class="tecla">O</span></button>
         </div>
+        <button class="cenab disparo" id="btnReplay">VINHETA DE REPLAY<span class="tecla">R</span></button>
       </div>
 
       <button class="btn btn-q btn-full" id="btnLink">Ver link do OBS</button>
@@ -635,7 +780,27 @@
       </div>
     </div>
 
-    <div class="cln">
+    <div class="cln area-tv">
+      <div class="stack" style="gap:10px">
+        <div class="row"><div class="mono">Preview da live</div>
+          <button class="mono lnk" id="btnYtTrocar">trocar link</button></div>
+        <div class="tv" id="tvBox">
+          <div class="tv-vazio" id="tvVazio">
+            <div>Cole o link da sua transmissão no YouTube para ver o placar sobre a imagem real.</div>
+          </div>
+          <iframe class="tv-video hidden" id="tvVideo" allow="autoplay; encrypted-media; picture-in-picture"
+                  allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+          <div class="tv-over hidden" id="tvOverWrap"><iframe class="tv-over-f" id="tvOver"></iframe></div>
+        </div>
+        <div class="field" id="tvCampo">
+          <input class="input" id="ytUrl" placeholder="youtube.com/live/… ou youtu.be/…" autocomplete="off">
+          <button class="btn btn-q btn-full" id="btnYt">Ligar o preview</button>
+        </div>
+        <div class="mono" id="ytMsg"></div>
+      </div>
+    </div>
+
+    <div class="cln area-patro">
       <details>
         <summary>Patrocinadores</summary>
         <div class="stack" style="gap:12px">
@@ -652,6 +817,9 @@
         </div>
       </details>
 
+      </div>
+
+    <div class="cln area-fila">
       <details>
         <summary>Próximos jogos da quadra</summary>
         <div class="stack" style="gap:12px">
@@ -687,7 +855,8 @@
 
     </div>
     </div>
-    <div class="body-sm" style="text-align:center;margin-top:14px" id="syncMsg">—</div>
+
+  <div class="body-sm" style="text-align:center;margin-top:14px" id="syncMsg">—</div>
   </div>
 </div>
 
@@ -730,10 +899,12 @@ function novaPartida(o){
   return {
     t1:o.t1, t2:o.t2, cat:o.cat||'', fase:o.fase||'',
     torneio:o.torneio||'', quadra:o.quadra||'', patrocinador:o.patrocinador||'',
-    proxima:'', cena:'placar', cartela:'', inicio:Date.now(), fimEm:null,
-    replayEm:0, agenda:Array.isArray(o.agenda)?o.agenda:[],
+    proxima:'', cena:'placar', cartela:'',
+    noArDesde:Date.now(),        // relógio da transmissão: nasce com ela
+    inicio:null, acum:0, rodando:false,   // relógio do jogo: parado até acionarem
+    replayEm:0, youtube:o.youtube||'',
+    agenda:Array.isArray(o.agenda)?o.agenda:[],
     patrocinios:Array.isArray(o.patrocinios)?o.patrocinios:[],
-    escala:o.escala||.78,   // tamanho do placar na tela, 1 = tamanho do design
     alvo:o.alvo||6, tbPts:o.tbPts||7, superTb:10, nSets:o.nSets||3, ouro:true,
     p1:0,p2:0,        // pontos do game
     g1:0,g2:0,        // games do set
@@ -843,24 +1014,61 @@ function novoSet(m){
 function fecharPartidaSePreciso(m){
   const need=precisaSets(m);
   if(m.s1>=need||m.s2>=need){
-    m.status='finished'; m.vencedor=m.s1>m.s2?1:2; m.fimEm=Date.now();
+    m.status='finished'; m.vencedor=m.s1>m.s2?1:2;
+    pausarTempo(m);              // congela o relógio do jogo no resultado
     m.evento={t:'FIM',time:m.vencedor};
     anotarResultado(m);
     return true;
   }
   return false;
 }
-// Tempo de jogo. Conta do primeiro ponto e congela quando a partida acaba.
+// ── Os dois relógios ──────────────────────────────────────────────
+// São coisas diferentes e não devem se confundir:
+//
+//   TRANSMISSÃO · começa sozinha quando a transmissão nasce e nunca
+//     para. Diz há quanto tempo você está no ar. Fica só no controle.
+//
+//   JOGO · só anda depois que alguém aperta para começar, e pode ser
+//     pausado (chuva, atendimento médico). É ele que aparece no placar
+//     do OBS — e só aparece depois de acionado.
+//
+// O tempo de jogo é guardado em duas partes: o que já foi acumulado em
+// trechos anteriores, e o trecho em curso. Assim pausar e retomar não
+// perde nada, e o relógio não depende de o aparelho ficar aberto.
 function duracao(m){
-  if(!m||!m.inicio) return 0;
-  return Math.max(0, ((m.fimEm||Date.now()) - m.inicio)/1000);
+  if(!m) return 0;
+  const base = m.acum || 0;
+  return base + (m.rodando && m.inicio ? Math.max(0,(Date.now()-m.inicio)/1000) : 0);
 }
-function relogio(m){
-  const s=Math.floor(duracao(m));
+function jogoComecou(m){ return !!m && ((m.acum||0) > 0 || !!m.rodando); }
+
+function iniciarTempo(m){
+  if(!m || m.rodando) return false;
+  m.inicio=Date.now(); m.rodando=true; m.v++;
+  return true;
+}
+function pausarTempo(m){
+  if(!m || !m.rodando) return false;
+  m.acum=duracao(m); m.rodando=false; m.inicio=null; m.v++;
+  return true;
+}
+function zerarTempo(m){
+  if(!m) return;
+  m.acum=0; m.rodando=false; m.inicio=null;
+}
+
+// Relógio da transmissão: anda desde que ela foi criada, sem pausa.
+function duracaoTransmissao(m){
+  return (m && m.noArDesde) ? Math.max(0,(Date.now()-m.noArDesde)/1000) : 0;
+}
+function relogioTransmissao(m){ return formatarTempo(duracaoTransmissao(m)); }
+function formatarTempo(segundos){
+  const s=Math.floor(segundos);
   const h=Math.floor(s/3600), mi=Math.floor(s%3600/60), se=s%60;
   const dd=n=>String(n).padStart(2,'0');
   return h ? h+':'+dd(mi)+':'+dd(se) : mi+':'+dd(se);
 }
+function relogio(m){ return formatarTempo(duracao(m)); }
 
 // ── Agenda da quadra ─────────────────────────────────────────
 // Cada item: {hora, ctx, a, b, placar, venc}
@@ -923,6 +1131,32 @@ function novoJogo(hora, ctx, a, b){
   return {hora:lp(hora), ctx:lp(ctx).toUpperCase(), a:lp(a), b:lp(b), placar:'', venc:0};
 }
 function jogoValido(j){ return !!(j && (j.a || j.b)); }
+
+// ── Preview da live ───────────────────────────────────────────────
+// Tira o identificador do vídeo de qualquer formato de endereço que o
+// YouTube usa. Devolve null quando não reconhece, para a tela poder
+// dizer isso em vez de mostrar um player quebrado.
+function idDoYouTube(url){
+  const t=String(url||'').trim();
+  if(!t) return null;
+  // já é só o id
+  if(/^[\w-]{11}$/.test(t)) return t;
+  let u;
+  try{ u=new URL(t.startsWith('http') ? t : 'https://'+t); }catch(e){ return null; }
+  const host=u.hostname.replace(/^www\./,'');
+  if(host==='youtu.be')      return (u.pathname.slice(1).split('/')[0]||null) || null;
+  if(!/(^|\.)youtube\.com$/.test(host) && host!=='youtube-nocookie.com') return null;
+  const v=u.searchParams.get('v');
+  if(v) return v;
+  const m=u.pathname.match(/\/(?:live|embed|shorts|v)\/([\w-]+)/);
+  return m ? m[1] : null;
+}
+function urlDoPlayer(id){
+  // mute=1 porque navegador bloqueia autoplay com som, e aqui o som
+  // atrapalharia quem está marcando ponto ao lado da quadra
+  return 'https://www.youtube.com/embed/'+encodeURIComponent(id)+
+         '?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1';
+}
 
 // ── Colar da planilha ─────────────────────────────────────────────
 // O Excel e o Google Sheets copiam células separadas por TAB. Também
@@ -1005,7 +1239,8 @@ function trocarJogo(m, jogo){
   m.p1=0; m.p2=0; m.g1=0; m.g2=0; m.s1=0; m.s2=0;
   m.setsFeitos=[]; m.inTb=false; m.tb1=0; m.tb2=0; m.superSet=false;
   m.saque=0; m.status='playing'; m.vencedor=null; m.evento=null;
-  m.inicio=Date.now(); m.fimEm=null; m.cena='placar'; m.cartela='';
+  zerarTempo(m);                 // o relógio da transmissão não se mexe
+  m.cena='placar'; m.cartela='';
   m.v++;
   return m;
 }
@@ -1115,11 +1350,17 @@ function pintarOverlay(m){
   if(!m||!m.t1) return;
   const mudou = m.v!==ultimoV;
 
-  // tamanho escolhido no controle
-  $('stage').style.setProperty('--esc', m.escala||.78);
-
   $('ovCtx').textContent=[m.cat,m.fase].filter(Boolean).join(' · ').toUpperCase()||'PARTIDA';
-  $('ovTempo').textContent=relogio(m);
+
+  // O tempo de jogo só entra no ar depois que alguém o acionou, e entra
+  // com uma animação curta — é informação que aparece no meio da
+  // transmissão, não pode simplesmente surgir seca.
+  const temTempo=jogoComecou(m), elT=$('ovTempo');
+  if(temTempo!==!elT.classList.contains('hidden')){
+    elT.classList.toggle('hidden', !temTempo);
+    if(temTempo) anima(elT,'entra');
+  }
+  if(temTempo) elT.textContent=relogio(m);
   $('ovN1').textContent=nome(m.t1);
   $('ovN2').textContent=nome(m.t2);
   $('ovB1').innerHTML=setsDoTime(m,1);
@@ -1400,20 +1641,6 @@ function segs(){
   mk($('segSets'),[1,3],'nSets');
 }
 
-// Tamanho do placar na tela. Fica guardado na partida, então o overlay
-// muda junto — não precisa mexer na fonte do OBS.
-const TAMANHOS=[{v:.6,r:'P'},{v:.78,r:'M'},{v:.9,r:'G'},{v:1,r:'XG'}];
-function pintarEscala(){
-  const at=M.escala||.78;
-  $('segEsc').innerHTML=TAMANHOS.map(t=>
-    `<button data-v="${t.v}" class="${Math.abs(at-t.v)<.001?'on':''}">${t.r}</button>`).join('');
-  $('segEsc').querySelectorAll('button').forEach(b=>b.onclick=()=>{
-    M.escala=Number(b.dataset.v); M.v++; pintarControle(); publicar();
-  });
-  $('escVal').textContent=Math.round(at*100)+'%';
-}
-
-// A fila da quadra, com o que já foi jogado logo abaixo do que falta.
 function pintarAgendaLista(agenda){
   const ag=Array.isArray(agenda)?agenda:[];
   const prox=ag.filter(i=>!i.placar), feitos=ag.filter(i=>i.placar);
@@ -1477,13 +1704,33 @@ function tirarDaFila(i){
 
 function pintarControle(){
   const m=M;
-  pintarEscala();
   pintarAgendaLista(m.agenda);
   pintarPatrocinios(m.patrocinios);
+  pintarPreview();
   $('liveMeta').textContent=[m.cat,m.fase].filter(Boolean).join(' · ').toUpperCase()||'PARTIDA';
   const t=tensao(m);
   $('liveState').textContent = m.status==='finished' ? 'ENCERRADA'
     : m.inTb ? (m.superSet?'SUPER TIEBREAK':'TIEBREAK') : (t?t.big:'');
+
+  // os relógios e o botão que aciona o do jogo
+  $('liveNoAr').textContent=relogioTransmissao(m);
+  $('liveTempo').textContent=jogoComecou(m)?relogio(m):'—';
+  const bt=$('btnTempo');
+  bt.disabled = m.status!=='playing';
+  bt.textContent = m.rodando ? 'Pausar o tempo de jogo'
+                 : jogoComecou(m) ? 'Retomar o tempo de jogo'
+                 : 'Começar o tempo de jogo';
+  bt.classList.toggle('btn-p', !m.rodando && !jogoComecou(m));
+  bt.classList.toggle('btn-q',  m.rodando || jogoComecou(m));
+
+  // a régua de estado
+  const cenaAtual=m.cena||'placar';
+  $('barraCena').textContent={placar:'PLACAR',oculto:'OCULTO',cartela:'CARTELA',
+    agenda:'PRÓXIMOS',patroc:'PATROCÍNIO'}[cenaAtual]||cenaAtual.toUpperCase();
+  const noAr = m.status==='playing' && cenaAtual!=='oculto';
+  const sig=$('sigAr');
+  sig.classList.toggle('frio', !noAr);
+  sig.lastChild.nodeValue = noAr ? 'NO AR' : (cenaAtual==='oculto' ? 'OCULTO' : 'PARADO');
   $('lb1').textContent=nome(m.t1); $('lb2').textContent=nome(m.t2);
   $('lp1').textContent=m.inTb?m.tb1:(m.p1>3?'AD':PTS[Math.min(m.p1,3)]);
   $('lp2').textContent=m.inTb?m.tb2:(m.p2>3?'AD':PTS[Math.min(m.p2,3)]);
@@ -1531,7 +1778,7 @@ function ajustar(cod){
   if(alvo==='s2') M.s2=lim(M.s2+sinal,9);
   // se o ajuste tirou a partida do fim, ela volta a rodar
   if(M.status==='finished' && M.s1<precisaSets(M) && M.s2<precisaSets(M)){
-    M.status='playing'; M.vencedor=null; M.fimEm=null;
+    M.status='playing'; M.vencedor=null;
   }
   // e o placar corrigido é relido: 6—6 liga o tiebreak, sair dele desliga
   if(alvo==='g1'||alvo==='g2') conferirTiebreak(M);
@@ -1673,7 +1920,19 @@ function ligarControle(){
       $('btnCopy').textContent='Copiado'; setTimeout(()=>$('btnCopy').textContent='Copiar link',1600);
     }catch(e){ $('ovUrl').select(); } };
   $('btnOpen').onclick=()=>window.open($('ovUrl').value,'_blank');
-  setInterval(()=>{ if(M) $('liveTempo').textContent='· '+relogio(M); },1000);
+  // os dois relógios andam sozinhos, sem esperar o banco responder
+  setInterval(()=>{
+    if(!M) return;
+    $('liveNoAr').textContent=relogioTransmissao(M);
+    $('liveTempo').textContent=jogoComecou(M)?relogio(M):'—';
+  },1000);
+
+  $('btnTempo').onclick=()=>{
+    const m=M; if(!m) return;
+    if(m.status!=='playing'){ return; }       // partida encerrada não volta a contar
+    m.rodando ? pausarTempo(m) : iniciarTempo(m);
+    pintarControle(); publicar();
+  };
 
   // A marca leva para o app. Se houver transmissão no ar, pergunta antes:
   // sair da página no meio de um jogo é o tipo de tropeço que não dá
@@ -1687,6 +1946,7 @@ function ligarControle(){
     window.scrollTo(0,0);
     atualizarVoltar();
   };
+  ligarPreview();
   ligarLayoutPC();
 }
 
@@ -1733,14 +1993,121 @@ function avisarConfig(){
   $('btnStart').disabled=true;
 }
 
+// ── Preview: liga, desliga e mantém a proporção ───────────────────
+let tvLigado=false;
+
+function pintarPreview(){
+  const id = M ? idDoYouTube(M.youtube) : null;
+  const temVideo = !!id;
+  $('tvVazio').classList.toggle('hidden', temVideo);
+  $('tvVideo').classList.toggle('hidden', !temVideo);
+  $('tvCampo').classList.toggle('hidden', temVideo);
+  $('btnYtTrocar').classList.toggle('hidden', !temVideo);
+
+  if(temVideo){
+    const novo=urlDoPlayer(id);
+    // só troca o src quando o vídeo mudou, senão o player reinicia
+    if($('tvVideo').getAttribute('data-id')!==id){
+      $('tvVideo').setAttribute('data-id',id);
+      $('tvVideo').src=novo;
+    }
+  } else {
+    $('tvVideo').removeAttribute('data-id');
+    $('tvVideo').src='about:blank';
+  }
+
+  // o overlay entra quando já existe transmissão criada
+  const temOverlay = !!tokenPub;
+  $('tvOverWrap').classList.toggle('hidden', !temOverlay);
+  if(temOverlay && !tvLigado){
+    tvLigado=true;
+    $('tvOver').src=location.origin+location.pathname+'?overlay='+encodeURIComponent(tokenPub);
+  }
+  ajustarPreview();
+}
+
+// O overlay roda em 1920×1080 de verdade e é encolhido para caber na
+// caixa — mesma conta do OBS, então o que você vê é a proporção real.
+function ajustarPreview(){
+  const cx=$('tvBox'), f=$('tvOver');
+  if(!cx||!f) return;
+  const l=cx.clientWidth;
+  if(!l) return;
+  f.style.transform='scale('+(l/1920)+')';
+}
+
+function ligarPreview(){
+  $('btnYt').onclick=()=>{
+    const bruto=$('ytUrl').value;
+    const id=idDoYouTube(bruto);
+    if(!id){
+      $('ytMsg').textContent='NÃO RECONHECI ESSE LINK DO YOUTUBE';
+      return;
+    }
+    $('ytMsg').textContent='';
+    M.youtube=bruto.trim(); M.v++;
+    pintarPreview(); publicar();
+  };
+  $('btnYtTrocar').onclick=()=>{
+    M.youtube=''; M.v++;
+    $('ytUrl').value=''; $('ytMsg').textContent='';
+    pintarPreview(); publicar();
+  };
+  addEventListener('resize', ajustarPreview);
+}
+
 function atualizarVoltar(){
   const b=$('btnVoltar'); if(!b) return;
   b.classList.toggle('hidden', $('linkbox').classList.contains('hidden'));
 }
 
 // ── Computador ────────────────────────────────────────────────────
+// ── Visualização: celular ou computador ───────────────────────────
+// Por padrão o placar decide pela largura da tela. O botão deixa você
+// forçar um dos dois — útil para conferir no celular como vai ficar no
+// computador, e para operar num tablet com a tela toda. A escolha fica
+// guardada neste aparelho.
 const PC_MIN=1040;
-function ehPC(){ return innerWidth>=PC_MIN; }
+const VIS_LS='lbt_visualizacao';
+let visForcada=null;    // 'cel' | 'pc' | null (automático)
+
+function lerVisualizacao(){
+  let v=null; try{ v=localStorage.getItem(VIS_LS); }catch(e){}
+  return (v==='cel'||v==='pc') ? v : null;
+}
+function modoAutomatico(){ return innerWidth>=PC_MIN ? 'pc' : 'cel'; }
+function modoEfetivo(){ return visForcada || modoAutomatico(); }
+function ehPC(){ return modoEfetivo()==='pc'; }
+
+function aplicarVisualizacao(){
+  const m=modoEfetivo(), r=document.documentElement;
+  r.classList.toggle('modo-pc',  m==='pc');
+  r.classList.toggle('modo-cel', m==='cel');
+  pintarBotaoVis();
+  return m;
+}
+function pintarBotaoVis(){
+  const b=$('btnVis'); if(!b) return;
+  const m=modoEfetivo(), auto=!visForcada;
+  b.textContent=(m==='pc'?'COMPUTADOR':'CELULAR')+(auto?' · AUTO':'');
+  b.title = auto
+    ? 'Escolhido pelo tamanho da tela. Clique para fixar o outro.'
+    : 'Fixado em '+(m==='pc'?'computador':'celular')+'. Clique para alternar.';
+}
+
+// Gira sempre na mesma ordem: automático → celular → computador → automático.
+// Três cliques e você viu os dois e voltou ao normal.
+const CICLO_VIS=[null,'cel','pc'];
+function alternarVisualizacao(){
+  const i=CICLO_VIS.indexOf(visForcada);
+  visForcada=CICLO_VIS[(i+1)%CICLO_VIS.length];
+  try{
+    visForcada ? localStorage.setItem(VIS_LS,visForcada) : localStorage.removeItem(VIS_LS);
+  }catch(e){}
+  aplicarVisualizacao();
+  ajustarGavetas();
+  window.scrollTo(0,0);
+}
 
 // No computador as gavetas do painel ficam abertas: o operador precisa
 // ver o jogo, as cenas e a fila de uma vez. A gaveta de colar planilha
@@ -1759,8 +2126,15 @@ const ATALHOS={
   o:()=>setCena('oculto')
 };
 function ligarLayoutPC(){
+  visForcada=lerVisualizacao();
+  aplicarVisualizacao();
   ajustarGavetas();
-  addEventListener('resize', ajustarGavetas);
+  $('btnVis').onclick=alternarVisualizacao;
+  // só mexe quando o modo realmente virou, não a cada pixel
+  addEventListener('resize', ()=>{
+    const antes=document.documentElement.classList.contains('modo-pc')?'pc':'cel';
+    if(aplicarVisualizacao()!==antes) ajustarGavetas();
+  });
   addEventListener('keydown', e=>{
     if(!ehPC() || !M) return;
     if(e.metaKey||e.ctrlKey||e.altKey) return;
@@ -1779,7 +2153,10 @@ if(OVERLAY_TOKEN){
   $('stage').classList.remove('hidden');
   escalar(); addEventListener('resize',escalar);
   // o relógio anda sozinho, sem depender da próxima resposta do banco
-  setInterval(()=>{ const el=$('ovTempo'); if(el&&ultimoM) el.textContent=relogio(ultimoM); },1000);
+  setInterval(()=>{
+    const el=$('ovTempo');
+    if(el && ultimoM && jogoComecou(ultimoM)) el.textContent=relogio(ultimoM);
+  },1000);
   if(OVERLAY_TOKEN==='demo') loopDemo(); else loopOverlay();
 }else{
   $('ctrl').classList.remove('hidden');

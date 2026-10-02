@@ -69,6 +69,30 @@ O `LOGOS.md` explica o porquê e o que limita o estrago.
 
 ## No dia do torneio
 
-Abra o controle no celular, monte a fila da quadra (ou cole da planilha),
-e use **JOGAR** para trocar de partida. O link do OBS é da quadra, não do
-jogo: ele fica igual do primeiro ao último jogo do dia.
+Abra o controle no celular ou no computador, monte a fila da quadra (ou
+cole da planilha), e use **JOGAR** para trocar de partida. O link do OBS
+é da quadra, não do jogo: ele fica igual do primeiro ao último jogo.
+
+O botão no topo alterna entre **celular** e **computador** — ele escolhe
+sozinho pelo tamanho da tela, e três cliques giram entre automático,
+celular fixo e computador fixo.
+
+### Preview da live
+
+Cole o link da sua transmissão no YouTube e a caixa de preview mostra o
+vídeo com o placar sobreposto, do jeito que está indo ao ar. O placar
+ali não é uma imitação: é o próprio overlay rodando, o mesmo arquivo que
+o OBS recebe, só encolhido para caber.
+
+Serve para conferir se o placar está bem posicionado sobre a imagem real
+da quadra, sem precisar sair da tela de controle.
+
+> Se o vídeo não aparecer, o canal pode ter o embed desativado. Nesse
+> caso o placar continua indo ao ar normalmente — só o preview aqui
+> dentro é que não funciona.
+
+### Tamanho do placar
+
+Fixo em 60%, que é a proporção que deixa a quadra respirar sem perder a
+leitura. Não há controle na tela de propósito: é decisão de produto, não
+de operação. Se um dia precisar mudar, é uma linha no CSS — `--esc`.
