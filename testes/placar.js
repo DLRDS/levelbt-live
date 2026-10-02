@@ -42,8 +42,10 @@ t('bc_create é chamado sem argumento nenhum',
   ()=>/rpc\('bc_create'\)/.test(html));
 t('não tenta mais ir para o app',
   ()=>!html.includes("location.href='index.html'") && !html.includes('destinoDaMarca'));
-t('a URL do banco está marcada para você preencher',
-  ()=>html.includes('COLE_AQUI_A_URL_DO_PROJETO'));
+t('o banco está ligado, com URL de verdade',
+  ()=>/const SUPA_URL='https:\/\/[a-z0-9]+\.supabase\.co';/.test(html));
+t('e com chave publicável, não secreta',
+  ()=>/const SUPA_KEY='sb_publishable_/.test(html) && !html.includes('sb_secret'));
 t('e não ficou nenhuma chave do banco do app',
   ()=>!html.includes('jvmgsedxwakzfpskvfpf'));
 
@@ -362,10 +364,25 @@ t('e no celular os atalhos de teclado não disparam', ()=>{
 });
 
 console.log('\n── SEM O BANCO CONFIGURADO, A TELA EXPLICA ──');
-// Este é o estado em que o repositório nasce: marcadores no lugar da
-// URL. Antes, o createClient explodia no topo do arquivo e a página
-// ficava preta, sem uma palavra.
-const cd2=c.document;
+// Agora o arquivo real está ligado, então este caso se testa numa cópia
+// com os marcadores de volta — é o estado em que alguém clonaria o
+// repositório. Antes, o createClient explodia no topo do arquivo e a
+// página ficava preta, sem uma palavra.
+const htmlCru=html
+  .replace(/const SUPA_URL='[^']*';/,"const SUPA_URL='COLE_AQUI_A_URL_DO_PROJETO';")
+  .replace(/const SUPA_KEY='[^']*';/,"const SUPA_KEY='COLE_AQUI_A_CHAVE_PUBLICA';");
+const semBanco=new JSDOM(htmlCru,{runScripts:'dangerously',url:'https://x/index.html',
+  pretendToBeVisual:true,beforeParse(w){
+    w.innerWidth=1440; w.scrollTo=()=>{}; w.confirm=()=>true;
+    w.supabase={createClient:(u)=>{
+      if(!/^https?:\/\//.test(String(u)))
+        throw new Error('Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL.');
+      return {rpc:async()=>({data:null,error:null})};
+    }};
+    w.matchMedia=()=>({matches:true,addListener(){},removeListener(){}});
+  }}).window;
+await new Promise(r3=>setTimeout(r3,700));
+const cd2=semBanco.document;
 t('a página não fica em branco',
   ()=>!cd2.getElementById('ctrl').classList.contains('hidden'));
 t('e diz que falta ligar o banco',
