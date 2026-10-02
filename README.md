@@ -91,6 +91,21 @@ da quadra, sem precisar sair da tela de controle.
 > caso o placar continua indo ao ar normalmente — só o preview aqui
 > dentro é que não funciona.
 
+### Formatos de partida
+
+Seguem a ITF (Rules of Beach Tennis 2025):
+
+| opção | o que é |
+|---|---|
+| **1 SET** | um set só decide |
+| **2 SETS** | até 2 sets; empatando em 1 a 1, um match tiebreak até 10 decide — é o formato padrão da ITF |
+| **3 SETS** | melhor de 3 sets inteiros, o terceiro é set normal |
+
+Em todos: set de 6 games com 2 de vantagem (ou 4, no set curto), tiebreak
+em 6—6 até 7 pontos, e **ponto de ouro obrigatório** em 40—40. No beach
+tennis não existe vantagem — a regra 8 da ITF chama de *deciding point*,
+e por aqui é o quarentão.
+
 ### Tamanho do placar
 
 Fixo em 60%, que é a proporção que deixa a quadra respirar sem perder a

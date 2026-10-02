@@ -681,7 +681,8 @@
         <div class="field"><label>Games</label><div class="seg" id="segGames"></div></div>
         <div class="field"><label>Tiebreak</label><div class="seg" id="segTb"></div></div>
       </div>
-      <div class="field"><label>Sets</label><div class="seg" id="segSets"></div></div>
+      <div class="field"><label>Sets</label><div class="seg" id="segSets"></div>
+        <div class="body-sm" id="setsExplica"></div></div>
       <div class="warn" id="setupMsg" style="display:none"></div>
       <button class="btn btn-p btn-full" id="btnStart">Gerar placar e link do OBS</button>
       <button class="btn btn-q btn-full" id="btnDemo">Ver demonstração do overlay</button>
@@ -910,7 +911,7 @@ function novaPartida(o){
     g1:0,g2:0,        // games do set
     s1:0,s2:0,        // sets vencidos
     setsFeitos:[],    // [{g1,g2}]
-    inTb:false, tb1:0, tb2:0, superSet:false,
+    inTb:false, tb1:0, tb2:0, superSet:false, tbAbriu:null,
     saque:0,          // 0..3 → índice do jogador
     status:'playing', vencedor:null,
     evento:null,      // selo momentâneo para o overlay
@@ -925,7 +926,12 @@ function partidaAtual(){ return M; }
 function definirPartida(m){ M=m; hist=[]; return M; }
 
 const nome=(t)=>t.filter(Boolean).join('/');
-const precisaSets=m=>m.nSets===3?2:1;
+// ── Formatos de partida ───────────────────────────────────────────
+//   1 → um set só
+//   2 → até 2 sets; empatando em 1 a 1, um match tiebreak até 10 decide
+//       (é o formato padrão da ITF, regra 7)
+//   3 → melhor de 3 sets inteiros, sem match tiebreak
+function precisaSets(m){ return m.nSets===1 ? 1 : 2; }
 
 // ── Regras ───────────────────────────────────────────────────
 function pontoPara(m,time){
@@ -939,6 +945,8 @@ function pontoPara(m,time){
     const a=m.tb1,b=m.tb2;
     if((a>=alvo&&a-b>=2)||(b>=alvo&&b-a>=2)){
       const vTb = a>b?1:2;
+      // guardado agora porque novoSet() logo abaixo limpa o tbAbriu
+      const abriuOTb = m.tbAbriu;
       if(m.superSet){                       // super tiebreak = o set inteiro
         m.setsFeitos.push({g1:vTb===1?1:0,g2:vTb===2?1:0,tb:[a,b]});
         vTb===1?m.s1++:m.s2++;
@@ -951,7 +959,10 @@ function pontoPara(m,time){
         novoSet(m);
       }
       m.inTb=false;m.tb1=0;m.tb2=0;
-      trocaSaque(m);
+      // Regra 8b: quem sacou primeiro no tiebreak RECEBE no primeiro game
+      // do set seguinte. Então o saque volta para o seguinte dele na roda.
+      m.saque = (abriuOTb!=null) ? proximoSaque(abriuOTb) : proximoSaque(m.saque);
+      m.tbAbriu=null;
     } else if((a+b)%2===1) trocaSaque(m);   // no tiebreak troca a cada 2 pontos
     m.v++; return;
   }
@@ -983,6 +994,8 @@ function ganhaGame(m,time,sacavaTime){
     if(!fecharPartidaSePreciso(m)) novoSet(m);
   } else if(m.g1>=m.alvo && m.g2>=m.alvo && m.g1===m.g2){
     m.inTb=true;m.tb1=0;m.tb2=0;
+    // quem abre o tiebreak é quem recebe no primeiro game do set seguinte
+    m.tbAbriu=proximoSaque(m.saque);
     m.evento={t:'TIEBREAK'};
   }
   trocaSaque(m);
@@ -1001,15 +1014,17 @@ function conferirTiebreak(m){
   const empatadoNoAlvo = m.g1>=m.alvo && m.g2>=m.alvo && m.g1===m.g2;
   if(empatadoNoAlvo && !m.inTb){
     m.inTb=true; m.tb1=0; m.tb2=0; m.p1=0; m.p2=0;
+    m.tbAbriu=proximoSaque(m.saque);
   } else if(!empatadoNoAlvo && m.inTb){
-    m.inTb=false; m.tb1=0; m.tb2=0;      // saiu do 6—6, sai do tie
+    m.inTb=false; m.tb1=0; m.tb2=0; m.tbAbriu=null;   // saiu do 6—6, sai do tie
   }
 }
 
 function novoSet(m){
-  m.g1=0;m.g2=0;m.inTb=false;m.tb1=0;m.tb2=0;
-  // terceiro set vira super tiebreak até 10
-  if(m.nSets===3 && m.s1===1 && m.s2===1){ m.superSet=true; m.inTb=true; }
+  m.g1=0;m.g2=0;m.inTb=false;m.tb1=0;m.tb2=0;m.tbAbriu=null;
+  // Só no formato de 2 sets o empate em 1 a 1 vira match tiebreak.
+  // Em "3 sets", o terceiro é um set normal.
+  if(m.nSets===2 && m.s1===1 && m.s2===1){ m.superSet=true; m.inTb=true; }
 }
 function fecharPartidaSePreciso(m){
   const need=precisaSets(m);
@@ -1237,7 +1252,7 @@ function trocarJogo(m, jogo){
   m.cat  = partes[0] || '';
   m.fase = partes.slice(1).join(' · ');
   m.p1=0; m.p2=0; m.g1=0; m.g2=0; m.s1=0; m.s2=0;
-  m.setsFeitos=[]; m.inTb=false; m.tb1=0; m.tb2=0; m.superSet=false;
+  m.setsFeitos=[]; m.inTb=false; m.tb1=0; m.tb2=0; m.superSet=false; m.tbAbriu=null;
   m.saque=0; m.status='playing'; m.vencedor=null; m.evento=null;
   zerarTempo(m);                 // o relógio da transmissão não se mexe
   m.cena='placar'; m.cartela='';
@@ -1245,8 +1260,27 @@ function trocarJogo(m, jogo){
   return m;
 }
 
+// ── Rodízio de saque (ITF, regra 15) ──────────────────────────────
+// saque é o índice em [t1[0], t1[1], t2[0], t2[1]].
+//
+// A ordem NÃO é 0,1,2,3. A cada game o sacador passa para a outra dupla,
+// e dentro de cada dupla os dois se alternam. Então a roda é:
+//
+//   t1[0] → t2[0] → t1[1] → t2[1] → t1[0] …
+//   índice:   0   →   2   →   1   →   3   →   0
+//
+// Estava somando 1, o que fazia a mesma dupla sacar dois games seguidos.
+const ORDEM_SAQUE=[0,2,1,3];
 function saqueDoTime(m){ return (m.saque===0||m.saque===1)?1:2; }
-function trocaSaque(m){ m.saque=(m.saque+1)%4; }
+function trocaSaque(m){
+  const i=ORDEM_SAQUE.indexOf(m.saque);
+  m.saque = ORDEM_SAQUE[(i<0 ? 0 : i+1) % 4];
+}
+// quem saca depois de um dado jogador, sem mexer na partida
+function proximoSaque(saque){
+  const i=ORDEM_SAQUE.indexOf(saque);
+  return ORDEM_SAQUE[(i<0 ? 0 : i+1) % 4];
+}
 
 // ── Momentos de tensão (derivados do placar) ─────────────────
 
@@ -1630,15 +1664,25 @@ async function loopOverlay(){
 }
 
 // ══════════════ MODO CONTROLE ══════════════
-let cfg={alvo:6,tbPts:7,nSets:3};
+let cfg={alvo:6,tbPts:7,nSets:2};   // padrão da ITF
+const ROTULO_SETS={1:'1 SET', 2:'2 SETS', 3:'3 SETS'};
+const EXPLICA_SETS={
+  1:'Um set só decide a partida.',
+  2:'Até 2 sets. Empatando em 1 a 1, um match tiebreak até 10 decide — é o formato padrão da ITF.',
+  3:'Melhor de 3 sets inteiros. O terceiro é um set normal, sem match tiebreak.'
+};
 function segs(){
-  const mk=(el,vals,key,suf)=>{
-    el.innerHTML=vals.map(v=>`<button data-v="${v}" class="${cfg[key]===v?'on':''}">${v}${suf||''}</button>`).join('');
+  const mk=(el,vals,key,suf,rot)=>{
+    el.innerHTML=vals.map(v=>{
+      const txt = rot ? rot[v] : (v+(suf||''));
+      return `<button data-v="${v}" class="${cfg[key]===v?'on':''}">${txt}</button>`;
+    }).join('');
     el.querySelectorAll('button').forEach(b=>b.onclick=()=>{cfg[key]=Number(b.dataset.v);segs();});
   };
   mk($('segGames'),[4,6],'alvo');
   mk($('segTb'),[7,10],'tbPts');
-  mk($('segSets'),[1,3],'nSets');
+  mk($('segSets'),[1,2,3],'nSets',null,ROTULO_SETS);
+  const ex=$('setsExplica'); if(ex) ex.textContent=EXPLICA_SETS[cfg.nSets]||'';
 }
 
 function pintarAgendaLista(agenda){

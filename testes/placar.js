@@ -68,6 +68,95 @@ const AJ=w.novaPartida({t1:['A','B'],t2:['C','D'],alvo:6,nSets:3});
 AJ.g1=6; AJ.g2=6; w.conferirTiebreak(AJ);
 t('corrigindo na mão até 6—6 também entra', ()=>AJ.inTb===true);
 
+console.log('\n── REGRAS DA ITF · RODÍZIO DE SAQUE (regra 15) ──');
+// saque é o índice em [t1[0], t1[1], t2[0], t2[1]].
+// A roda certa é t1[0] → t2[0] → t1[1] → t2[1], ou seja 0 → 2 → 1 → 3.
+const sqA=w.novaPartida({t1:['A1','A2'],t2:['B1','B2'],alvo:6,nSets:2});
+const ganhaUmGame=(m,time)=>{ for(let i=0;i<4 && !m.inTb && m.status==='playing';i++) w.pontoPara(m,time); };
+const times=[];
+sqA.saque=0;
+for(let g=0; g<8; g++){ times.push(w.saqueDoTime(sqA)); ganhaUmGame(sqA, g%2===0?1:2); }
+t('as duplas se alternam a cada game, nunca duas seguidas',
+  ()=>times.join('')==='12121212');
+
+const sqB=w.novaPartida({t1:['A1','A2'],t2:['B1','B2']});
+sqB.saque=0;
+const idx=[0];
+for(let i=0;i<5;i++){ w.trocaSaque(sqB); idx.push(sqB.saque); }
+t('a roda é 0 → 2 → 1 → 3 e volta', ()=>idx.join(',')==='0,2,1,3,0,2');
+t('dentro da dupla, os dois se revezam', ()=>{
+  // os saques da dupla 1 na roda são 0 e 1, alternando
+  const daUm=idx.filter(i=>i===0||i===1);
+  return daUm.join(',')==='0,1,0';
+});
+
+console.log('\n── TIEBREAK (regra 8b) ──');
+const tbA=w.novaPartida({t1:['A1','A2'],t2:['B1','B2'],alvo:6,tbPts:7,nSets:2});
+// leva a 6—6
+tbA.g1=5; tbA.g2=6; tbA.saque=0;
+ganhaUmGame(tbA,1);
+t('6—6 entra no tiebreak', ()=>tbA.inTb===true);
+const abriu=tbA.saque;
+t('o tiebreak guarda quem abriu', ()=>tbA.tbAbriu===abriu);
+
+// o saque troca depois dos pontos 1, 3, 5 — um ponto, depois de dois em dois
+const seq=[];
+for(let i=0;i<6;i++){ seq.push(tbA.saque); w.pontoPara(tbA, i%2===0?1:2); }
+t('o primeiro ponto é de um, os dois seguintes do outro',
+  ()=>seq[0]!==seq[1] && seq[1]===seq[2] && seq[2]!==seq[3] && seq[3]===seq[4]);
+
+// fecha o tiebreak
+const tbB=w.novaPartida({t1:['A1','A2'],t2:['B1','B2'],alvo:6,tbPts:7,nSets:2});
+tbB.g1=6; tbB.g2=6; tbB.inTb=true; tbB.saque=0; tbB.tbAbriu=0;
+for(let i=0;i<7;i++) w.pontoPara(tbB,1);
+t('tiebreak até 7 fecha o set', ()=>tbB.s1===1 && tbB.inTb===false);
+t('quem abriu o tiebreak recebe no set seguinte',
+  ()=>tbB.saque===w.proximoSaque(0));
+
+console.log('\n── FORMATOS DE PARTIDA (regras 6 e 7) ──');
+const um=w.novaPartida({t1:['A'],t2:['B'],nSets:1,alvo:6});
+um.g1=5; um.p1=3; w.pontoPara(um,1);
+t('1 set: um set decide', ()=>um.status==='finished' && um.vencedor===1);
+
+const dois=w.novaPartida({t1:['A'],t2:['B'],nSets:2,alvo:6});
+dois.s1=1; dois.s2=1; w.novoSet(dois);
+t('2 sets: empate em 1 a 1 vira match tiebreak',
+  ()=>dois.superSet===true && dois.inTb===true);
+t('e o match tiebreak é até 10', ()=>dois.superTb===10);
+const d2=w.novaPartida({t1:['A'],t2:['B'],nSets:2,alvo:6});
+d2.s1=1; d2.s2=1; w.novoSet(d2);
+for(let i=0;i<10;i++) w.pontoPara(d2,1);
+t('ganhando o match tiebreak, ganha a partida',
+  ()=>d2.status==='finished' && d2.vencedor===1 && d2.s1===2);
+
+const tres=w.novaPartida({t1:['A'],t2:['B'],nSets:3,alvo:6});
+tres.s1=1; tres.s2=1; w.novoSet(tres);
+t('3 sets: o terceiro é set normal, sem match tiebreak',
+  ()=>tres.superSet===false && tres.inTb===false);
+t('e os dois formatos longos pedem 2 sets para vencer',
+  ()=>w.precisaSets({nSets:2})===2 && w.precisaSets({nSets:3})===2);
+t('o de um set pede só um', ()=>w.precisaSets({nSets:1})===1);
+
+console.log('\n── GAME E SET (regras 7 e 8) ──');
+const gmA=w.novaPartida({t1:['A'],t2:['B'],alvo:6,nSets:2});
+w.pontoPara(gmA,1); w.pontoPara(gmA,1); w.pontoPara(gmA,1);
+t('15, 30, 40', ()=>gmA.p1===3);
+w.pontoPara(gmA,2); w.pontoPara(gmA,2); w.pontoPara(gmA,2);
+t('40—40 é ponto decisivo, sem vantagem', ()=>w.ehQuarentao(gmA)===true);
+w.pontoPara(gmA,2);
+t('quem faz o ponto decisivo leva o game', ()=>gmA.g2===1 && gmA.p1===0 && gmA.p2===0);
+
+const stA=w.novaPartida({t1:['A'],t2:['B'],alvo:6,nSets:2});
+stA.g1=5; stA.g2=4; stA.p1=3; w.pontoPara(stA,1);
+t('6—4 fecha o set', ()=>stA.s1===1);
+const stB=w.novaPartida({t1:['A'],t2:['B'],alvo:6,nSets:2});
+stB.g1=5; stB.g2=5; stB.p1=3; w.pontoPara(stB,1);
+t('6—5 não fecha: precisa de 2 de vantagem', ()=>stB.s1===0 && stB.g1===6);
+
+const stC=w.novaPartida({t1:['A'],t2:['B'],alvo:4,nSets:2});
+stC.g1=3; stC.g2=4; stC.p1=3; w.pontoPara(stC,1);
+t('set curto: 4—4 também vai para o tiebreak', ()=>stC.inTb===true);
+
 console.log('\n── OS DOIS RELÓGIOS ──');
 const R=w.novaPartida({t1:['A','B'],t2:['C','D']});
 t('a transmissão já nasce contando',      ()=>R.noArDesde>0);
