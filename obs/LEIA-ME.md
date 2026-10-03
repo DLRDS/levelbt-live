@@ -8,9 +8,13 @@ de campeão **sem** depender do painel de controle — por atalho do OBS,
 por cena, ou numa transmissão que nem tem placar.
 
 ```
-gerar.js     monta o pecas.html a partir do index.html
-pecas.html   as sete peças, escolhidas pelo endereço
+gerar.js            monta o pecas.html a partir do index.html
+pecas.html          as sete peças, escolhidas pelo endereço
+levelbt-replay.lua  carrega o replay recém-salvo na Fonte de Mídia
 ```
+
+O `levelbt-replay.lua` não tem a ver com as peças — é o script que faz o
+replay completo funcionar. Está documentado no `COMANDO-OBS.md`.
 
 ## Como adicionar no OBS
 

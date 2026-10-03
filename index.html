@@ -1472,8 +1472,9 @@ function obsExecutar(cmd){
 //
 // Um botão, e o overlay conduz tudo daqui de dentro do OBS:
 //
-//   0,0s  manda o OBS salvar o buffer  +  a cortina entra
-//   1,2s  com a tela coberta, corta para a cena do replay
+//   0,0s  manda o OBS salvar o buffer
+//   0,7s  a cortina entra
+//   1,9s  com a tela coberta, corta para a cena do replay
 //         (o placar some e entra o selo REPLAY)
 //    +D   a cortina entra de novo
 //   +1,2s com a tela coberta, volta para a cena ao vivo
@@ -1485,7 +1486,8 @@ function obsExecutar(cmd){
 // Quem toca o arquivo é o OBS — o script instant-replay.lua, que vem
 // com ele, carrega o vídeo recém-salvo numa Fonte de Mídia. Essa parte
 // a gente não tem como fazer: a página nunca vê o vídeo.
-const COBERTO_MS=1200;
+const COBERTO_MS=1200;   // instante, dentro da cortina, em que a tela está tapada
+const PRE_SALVA_MS=700;  // folga entre mandar salvar e começar a cortina
 let emReplay=false, replayTimers=[];
 
 function pararSequenciaReplay(){
@@ -1501,21 +1503,27 @@ function obsSequenciaReplay(cfg){
   emReplay=true;
 
   const sel=$('ovSeloRep');
-  tocarReplay();                                   // cortina entra
-  if(obsTem('saveReplayBuffer')) { try{ OBS.saveReplayBuffer(); }catch(e){} }
-
   const marcar=(ms,fn)=>replayTimers.push(setTimeout(fn,ms));
 
-  marcar(COBERTO_MS, ()=>{                         // tela coberta: corta
+  // Salvar vem ANTES da cortina, de propósito. O OBS leva um instante
+  // para fechar o arquivo, e o script tem de carregá-lo na Fonte de
+  // Mídia. Se a gente cortasse 1,2s depois de pedir o salvamento, a cena
+  // do replay entraria com o vídeo ainda carregando. Com esta folga, o
+  // corte acontece ~1,9s depois — tempo suficiente na prática.
+  if(obsTem('saveReplayBuffer')) { try{ OBS.saveReplayBuffer(); }catch(e){} }
+
+  marcar(PRE_SALVA_MS, ()=> tocarReplay());        // cortina entra
+
+  marcar(PRE_SALVA_MS + COBERTO_MS, ()=>{          // tela coberta: corta
     if(cfg.cenaReplay && obsTem('setCurrentScene')){
       try{ OBS.setCurrentScene(cfg.cenaReplay); }catch(e){}
     }
     if(sel) sel.classList.remove('hidden');
   });
 
-  marcar(COBERTO_MS + D, ()=> tocarReplay());      // cortina de volta
+  marcar(PRE_SALVA_MS + COBERTO_MS + D, ()=> tocarReplay());   // cortina de volta
 
-  marcar(COBERTO_MS + D + COBERTO_MS, ()=>{        // coberta: volta ao vivo
+  marcar(PRE_SALVA_MS + COBERTO_MS + D + COBERTO_MS, ()=>{     // coberta: volta
     if(cfg.cenaAoVivo && obsTem('setCurrentScene')){
       try{ OBS.setCurrentScene(cfg.cenaAoVivo); }catch(e){}
     }

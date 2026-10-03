@@ -52,14 +52,25 @@ Depois ligue o buffer na janela principal.
 > Os arquivos vão para a mesma pasta da gravação — Configurações → Saída
 > → *Caminho de gravação*. É lá que o replay aparece.
 
-**2 · Ligue o `instant-replay.lua`.** Ferramentas → Scripts → `+` → ele
-já vem com o OBS, em `data/obs-plugins/frontend-tools/scripts/`. Esse
-script é quem carrega o arquivo recém-salvo numa Fonte de Mídia — a
-parte que nós não temos como fazer, porque a nossa página nunca vê o
-vídeo. Aponte o script para a Fonte de Mídia que ficará na cena do
-replay.
+**2 · Crie a cena do replay** com uma **Fonte de Mídia** dentro. Pode
+deixá-la vazia; quem vai preencher é o script do passo seguinte. Nas
+propriedades dela, marque *Reiniciar a reprodução quando a fonte ficar
+ativa*.
 
-**3 · Crie uma cena** só para o replay, com essa Fonte de Mídia dentro.
+**3 · Ligue o `obs/levelbt-replay.lua`.** Ferramentas → Scripts → `+` →
+escolha o arquivo em `obs/levelbt-replay.lua` deste repositório. Em
+**Fonte de Mídia**, escolha a fonte que você acabou de criar.
+
+> **Por que não o `instant-replay.lua` que vem com o OBS?** Porque ele
+> pendura tudo num atalho de teclado próprio: o mesmo atalho salva o
+> buffer *e* carrega o arquivo. Quando o replay é salvo por fora — que é
+> o que o nosso botão faz — ele não fica sabendo, e a Fonte de Mídia
+> continua com o vídeo anterior. Foi exatamente isso que fez as animações
+> rodarem certinho sem nenhum replay aparecer.
+>
+> O nosso script não registra atalho: ele ouve o **evento** de replay
+> salvo, venha de onde vier. Funciona com o botão do Level BT, com o
+> atalho do OBS, com qualquer coisa.
 
 ### Depois, no painel
 
@@ -70,16 +81,23 @@ quantos segundos: 5, 10 ou 15. O botão muda de *VINHETA DE REPLAY* para
 ### O que acontece quando você aperta
 
 ```
-0,0s   o OBS salva o buffer  +  a cortina entra
-1,2s   com a tela coberta, corta para a cena do replay
+0,0s   o OBS salva o buffer
+0,7s   a cortina entra
+1,9s   com a tela coberta, corta para a cena do replay
        (o placar some e entra o selo REPLAY)
  +D    a cortina entra de novo
 +1,2s  com a tela coberta, volta para a cena ao vivo
 ```
 
-O 1,2 s não é chute: a cortina cobre a tela entre 0,78 s e 1,72 s da
-animação, e o corte acontece no meio dessa janela. É isso que faz a troca
-ficar invisível. Mexer num dos dois sem o outro quebra o efeito.
+Nenhum desses tempos é chute. A cortina cobre a tela entre 0,78 s e
+1,72 s da animação, e o corte acontece no meio dessa janela — é isso que
+torna a troca invisível. E a cortina só começa 0,7 s depois do pedido de
+salvamento, para dar ao OBS tempo de fechar o arquivo e ao script tempo
+de carregá-lo: assim o corte cai ~1,9 s depois de você apertar.
+
+Se na sua máquina o vídeo ainda entrar atrasado, são duas constantes no
+`index.html`: `PRE_SALVA_MS` (a folga) e `COBERTO_MS` (o instante do
+corte).
 
 O placar sai durante o replay de propósito — ele mostraria o estado de
 agora sobre uma imagem de segundos atrás.

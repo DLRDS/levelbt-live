@@ -584,9 +584,15 @@ t('o selo de REPLAY existe e começa escondido',
 
 seq.chamou.length=0;
 seq.w.obsSequenciaReplay({cenaReplay:'Replay', cenaAoVivo:'Ao vivo', segundos:2});
-t('manda salvar o buffer na hora', ()=>seq.chamou.includes('saveReplayBuffer'));
-t('a cortina entra junto', ()=>seqD.getElementById('ovRep').classList.contains('show'));
-t('mas não corta ainda: a tela ainda está limpa',
+t('manda salvar o buffer primeiro de tudo', ()=>seq.chamou.includes('saveReplayBuffer'));
+t('a cortina ainda não entrou: o arquivo precisa de folga',
+  ()=>!seqD.getElementById('ovRep').classList.contains('show'));
+t('e muito menos corta', ()=>!seq.chamou.some(c=>c.startsWith('setCurrentScene')));
+
+await new Promise(rB0=>setTimeout(rB0,900));
+t('passada a folga, a cortina entra',
+  ()=>seqD.getElementById('ovRep').classList.contains('show'));
+t('e o corte só vem depois dela cobrir',
   ()=>!seq.chamou.some(c=>c.startsWith('setCurrentScene')));
 
 await new Promise(rB=>setTimeout(rB,1400));   // passa o instante coberto
@@ -618,6 +624,25 @@ t('a duração é limitada, para um valor absurdo não travar a transmissão', (
 });
 t('o instante do corte casa com a janela coberta da cortina',
   ()=>/const COBERTO_MS=1200;/.test(html) && /replayVarre 2\.6s/.test(html));
+t('existe folga entre salvar e cortar, para o arquivo ficar pronto',
+  ()=>/const PRE_SALVA_MS=700;/.test(html));
+
+console.log('\n── O SCRIPT QUE CARREGA O ARQUIVO ──');
+const lua=require('fs').readFileSync(require('path').join(__dirname,'..','obs','levelbt-replay.lua'),'utf8');
+t('o script existe no repositório', ()=>lua.length>500);
+t('ele ouve o EVENTO de replay salvo, não um atalho',
+  ()=>lua.includes('OBS_FRONTEND_EVENT_REPLAY_BUFFER_SAVED')
+    && lua.includes('obs_frontend_add_event_callback'));
+t('e não registra atalho nenhum — era isso que quebrava',
+  ()=>!lua.includes('obs_hotkey_register_frontend'));
+t('pergunta ao buffer qual foi o último arquivo',
+  ()=>lua.includes('get_last_replay'));
+t('aguenta o arquivo demorar, em vez de supor um tempo',
+  ()=>lua.includes('MAX_TENTATIVAS') && lua.includes('timer_add'));
+t('sabe lidar com Fonte de Mídia e com VLC',
+  ()=>lua.includes('ffmpeg_source') && lua.includes('vlc_source'));
+t('avisa no log quando a fonte não existe',
+  ()=>lua.includes('nao achei a Fonte de Midia'));
 
 console.log('\n── PONTE COM O OBS · PAINEL ──');
 const ctrlObs=abrir('https://x/index.html',1440);
