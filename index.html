@@ -489,6 +489,14 @@
   .apo.out{animation:faixaOut .35s ease forwards;}
   @keyframes apoTroca{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:none}}
 
+  /* — SELO DE REPLAY — fica enquanto o corte roda, para ninguém achar
+       que é jogo ao vivo. O placar some junto, porque estaria errado. */
+  .selo-rep{display:flex;align-items:center;gap:12px;background:var(--orange);
+    color:var(--ink);padding:14px 22px;font-family:var(--fm);font-size:26px;
+    font-weight:700;letter-spacing:.2em;animation:faixaIn .4s cubic-bezier(.2,.8,.2,1);}
+  .selo-rep i{width:12px;height:12px;border-radius:999px;background:var(--ink);display:block;
+    animation:vivoPisca 1.4s steps(2,jump-none) infinite;}
+
   /* — PATROCÍNIO — */
   .spo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(13,13,13,.72);opacity:0;pointer-events:none;}
@@ -571,6 +579,10 @@
 
   <div class="anc br" style="right:64px;bottom:56px">
     <div class="apo hidden" id="ovApo"></div>
+  </div>
+
+  <div class="anc tr" style="right:64px;top:56px">
+    <div class="selo-rep hidden" id="ovSeloRep"><i></i>REPLAY</div>
   </div>
 
   <div class="anc tr" style="right:64px;top:300px">
@@ -910,6 +922,7 @@ function novaPartida(o){
     noArDesde:Date.now(),        // relógio da transmissão: nasce com ela
     inicio:null, acum:0, rodando:false,   // relógio do jogo: parado até acionarem
     replayEm:0, youtube:o.youtube||'',
+    obsCfg:{cenaReplay:'', cenaAoVivo:'', segundos:10},
     agenda:Array.isArray(o.agenda)?o.agenda:[],
     patrocinios:Array.isArray(o.patrocinios)?o.patrocinios:[],
     alvo:o.alvo||6, tbPts:o.tbPts||7, superTb:10, nSets:o.nSets||3, ouro:true,
@@ -1436,6 +1449,8 @@ function obsExecutar(cmd){
       case 'replay':
         if(!obsTem('saveReplayBuffer')) return 'sem permissão';
         OBS.saveReplayBuffer(); return 'ok';
+      case 'replaySeq':
+        obsSequenciaReplay(cmd.cfg||{}); return 'ok';
       case 'cena':
         if(!obsTem('setCurrentScene') || !cmd.arg) return 'sem permissão';
         OBS.setCurrentScene(cmd.arg); return 'ok';
@@ -1451,6 +1466,62 @@ function obsExecutar(cmd){
       default: return 'comando desconhecido';
     }
   }catch(e){ return 'erro: '+(e.message||e); }
+}
+
+// ── A coreografia completa do replay ──────────────────────────────
+//
+// Um botão, e o overlay conduz tudo daqui de dentro do OBS:
+//
+//   0,0s  manda o OBS salvar o buffer  +  a cortina entra
+//   1,2s  com a tela coberta, corta para a cena do replay
+//         (o placar some e entra o selo REPLAY)
+//    +D   a cortina entra de novo
+//   +1,2s com a tela coberta, volta para a cena ao vivo
+//
+// O tempo de 1,2s não é chute: a cortina cobre a tela entre 0,78s e
+// 1,72s da animação. Cortar no meio dessa janela é o que faz o corte
+// ficar invisível. Mexer num dos dois sem o outro quebra o efeito.
+//
+// Quem toca o arquivo é o OBS — o script instant-replay.lua, que vem
+// com ele, carrega o vídeo recém-salvo numa Fonte de Mídia. Essa parte
+// a gente não tem como fazer: a página nunca vê o vídeo.
+const COBERTO_MS=1200;
+let emReplay=false, replayTimers=[];
+
+function pararSequenciaReplay(){
+  replayTimers.forEach(clearTimeout); replayTimers=[];
+  emReplay=false;
+  const sel=$('ovSeloRep'); if(sel) sel.classList.add('hidden');
+}
+
+function obsSequenciaReplay(cfg){
+  cfg=cfg||{};
+  const D=Math.max(2, Math.min(60, Number(cfg.segundos)||10))*1000;
+  pararSequenciaReplay();
+  emReplay=true;
+
+  const sel=$('ovSeloRep');
+  tocarReplay();                                   // cortina entra
+  if(obsTem('saveReplayBuffer')) { try{ OBS.saveReplayBuffer(); }catch(e){} }
+
+  const marcar=(ms,fn)=>replayTimers.push(setTimeout(fn,ms));
+
+  marcar(COBERTO_MS, ()=>{                         // tela coberta: corta
+    if(cfg.cenaReplay && obsTem('setCurrentScene')){
+      try{ OBS.setCurrentScene(cfg.cenaReplay); }catch(e){}
+    }
+    if(sel) sel.classList.remove('hidden');
+  });
+
+  marcar(COBERTO_MS + D, ()=> tocarReplay());      // cortina de volta
+
+  marcar(COBERTO_MS + D + COBERTO_MS, ()=>{        // coberta: volta ao vivo
+    if(cfg.cenaAoVivo && obsTem('setCurrentScene')){
+      try{ OBS.setCurrentScene(cfg.cenaAoVivo); }catch(e){}
+    }
+    if(sel) sel.classList.add('hidden');
+    emReplay=false;
+  });
 }
 
 // Cada comando carrega um id. O overlay roda uma vez por id, então
@@ -1618,7 +1689,9 @@ function pintarOverlay(m){
   if(cena==='agenda') montarAgenda(m);
 
   // o placar some nas cenas que ocupam a tela
-  const escondeBug = cena==='oculto'||cena==='cartela'||cena==='agenda'||cena==='patroc';
+  // durante o replay o placar sai: ele mostraria o estado de agora sobre
+  // uma imagem de segundos atrás
+  const escondeBug = emReplay || cena==='oculto'||cena==='cartela'||cena==='agenda'||cena==='patroc';
   const fora = escondeBug || m.status==='finished';
   $('bug').classList.toggle('out', fora);
   // por classe, não por style.opacity: a animação com fill-mode ganha do estilo inline
@@ -1911,21 +1984,60 @@ function pintarObs(){
 
   est.textContent='PRONTO · NÍVEL '+o.nivel;
   const cenas=Array.isArray(o.cenas)?o.cenas:[];
+  const cfg=(M && M.obsCfg) || {};
+  const opcoes=(sel)=>'<option value="">—</option>'+
+    cenas.map(c=>`<option value="${esc(c)}" ${c===sel?'selected':''}>${esc(c)}</option>`).join('');
+
   cx.innerHTML =
-    '<button class="btn btn-q btn-full" id="obsReplay">Salvar replay no OBS</button>'+
     (cenas.length
-      ? '<div class="mono" style="margin-top:4px">Trocar de cena</div>'+
+      ? '<div class="grid2">'+
+          '<div class="field"><label>Cena do replay</label>'+
+            '<select class="input" id="obsCenaRep">'+opcoes(cfg.cenaReplay)+'</select></div>'+
+          '<div class="field"><label>Cena ao vivo</label>'+
+            '<select class="input" id="obsCenaViva">'+opcoes(cfg.cenaAoVivo)+'</select></div>'+
+        '</div>'+
+        '<div class="field"><label>Quanto tempo de replay</label>'+
+          '<div class="seg" id="obsSegs"></div></div>'+
+        '<div class="mono" style="margin-top:4px">Trocar de cena agora</div>'+
         '<div class="cenas" id="obsCenas">'+
         cenas.map(c=>`<button class="cenab ${c===o.cena?'on':''}" data-cena="${esc(c)}">${esc(c)}</button>`).join('')+
         '</div>'
-      : '<div class="body-sm">O OBS não listou as cenas.</div>');
+      : '<div class="body-sm">O OBS não listou as cenas.</div>')+
+    '<button class="btn btn-q btn-full" id="obsReplay">Só salvar o replay</button>';
+
+  const guarda=()=>{
+    if(!M.obsCfg) M.obsCfg={};
+    M.obsCfg.cenaReplay=($('obsCenaRep')||{}).value||'';
+    M.obsCfg.cenaAoVivo=($('obsCenaViva')||{}).value||'';
+    M.v++; publicar();
+  };
+  if($('obsCenaRep'))  $('obsCenaRep').onchange=guarda;
+  if($('obsCenaViva')) $('obsCenaViva').onchange=guarda;
+
+  const segs=$('obsSegs');
+  if(segs){
+    const atual=(cfg.segundos||10);
+    segs.innerHTML=[5,10,15].map(v=>
+      `<button data-s="${v}" class="${atual===v?'on':''}">${v}s</button>`).join('');
+    segs.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      if(!M.obsCfg) M.obsCfg={};
+      M.obsCfg.segundos=Number(b.dataset.s); M.v++; publicar(); pintarObs();
+    });
+  }
 
   $('obsReplay').onclick=()=>{
     mandarAoObs('replay');
     const b=$('obsReplay'); b.disabled=true; b.textContent='Salvando…';
-    setTimeout(()=>{ b.disabled=false; b.textContent='Salvar replay no OBS'; },2500);
+    setTimeout(()=>{ b.disabled=false; b.textContent='Só salvar o replay'; },2500);
   };
   cx.querySelectorAll('[data-cena]').forEach(b=>b.onclick=()=>mandarAoObs('cena', b.dataset.cena));
+}
+
+// O replay completo só roda se as duas cenas estiverem escolhidas: sem
+// elas, o overlay não saberia para onde cortar nem para onde voltar.
+function replayCompletoPronto(){
+  const c=(M && M.obsCfg) || {};
+  return obsPode() && !!c.cenaReplay && !!c.cenaAoVivo;
 }
 
 function tirarDaFila(i){
@@ -1948,6 +2060,14 @@ function pintarControle(){
   // os relógios e o botão que aciona o do jogo
   $('liveNoAr').textContent=relogioTransmissao(m);
   $('liveTempo').textContent=jogoComecou(m)?relogio(m):'—';
+  const br=$('btnReplay');
+  if(br && !br.disabled){
+    const segs=(m.obsCfg&&m.obsCfg.segundos)||10;
+    br.innerHTML = replayCompletoPronto()
+      ? 'REPLAY COMPLETO · '+segs+'s<span class="tecla">R</span>'
+      : 'VINHETA DE REPLAY<span class="tecla">R</span>';
+  }
+
   const bt=$('btnTempo');
   bt.disabled = m.status!=='playing';
   bt.textContent = m.rodando ? 'Pausar o tempo de jogo'
@@ -2084,17 +2204,30 @@ function ligarControle(){
   $('btnLink').onclick=()=>{ $('linkbox').classList.toggle('hidden'); atualizarVoltar(); };
   document.querySelectorAll('.cenab[data-c]').forEach(b=>b.onclick=()=>setCena(b.dataset.c));
   $('btnReplay').onclick=()=>{
-    // Um botão, duas coisas: o OBS salva os últimos segundos e a cortina
-    // entra para cobrir o corte. Antes eram dois atalhos em sequência.
-    M.replayEm=Date.now();
-    if(obsPode()){
-      M.obsCmd={ id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-                 acao:'replay', arg:'', em:Date.now() };
+    // Três comportamentos, do mais completo ao mais simples:
+    //
+    //   cenas escolhidas → o overlay conduz tudo: salva, corta para o
+    //     replay, toca, e volta ao vivo
+    //   OBS sem cenas    → salva o buffer e toca só a cortina
+    //   sem OBS          → só a cortina, como sempre foi
+    const completo=replayCompletoPronto();
+    const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+    if(completo){
+      M.obsCmd={ id, acao:'replaySeq', em:Date.now(),
+                 cfg:Object.assign({segundos:10}, M.obsCfg||{}) };
+    } else {
+      M.replayEm=Date.now();           // a cortina, disparada pelo carimbo
+      if(obsPode()) M.obsCmd={ id, acao:'replay', arg:'', em:Date.now() };
     }
     M.v++; publicar();
+
     const b=$('btnReplay'), t=b.textContent;
-    b.disabled=true; b.textContent = obsPode() ? 'SALVANDO E NO AR…' : 'NO AR…';
-    setTimeout(()=>{ b.disabled=false; b.textContent=t; }, REPLAY_MS);
+    const segs=(M.obsCfg&&M.obsCfg.segundos)||10;
+    b.disabled=true;
+    b.textContent = completo ? 'REPLAY NO AR…' : (obsPode() ? 'SALVANDO E NO AR…' : 'NO AR…');
+    const espera = completo ? (segs*1000 + 3200) : REPLAY_MS;
+    setTimeout(()=>{ b.disabled=false; b.textContent=t; }, espera);
   };
   $('spArq').onchange=async e=>{
     const arq=e.target.files&&e.target.files[0];

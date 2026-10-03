@@ -37,6 +37,64 @@ Se aparecer `SEM PERMISSÃO`, o passo 2 não pegou. Se aparecer
 `PROCURANDO…`, a fonte do overlay não está numa cena ativa — o OBS só
 executa a página quando ela está visível.
 
+## Replay completo, num botão
+
+É a coreografia inteira: a cortina entra, o OBS corta para o replay com a
+tela coberta, o clipe passa, a cortina volta e a transmissão ao vivo
+retorna. Você aperta uma vez e não toca em mais nada.
+
+### Antes, duas coisas no OBS
+
+**1 · Ligue o Replay Buffer.** Configurações → Saída → marque *Habilitar
+buffer de repetição* e escolha quantos segundos guardar (15 dá folga).
+Depois ligue o buffer na janela principal.
+
+> Os arquivos vão para a mesma pasta da gravação — Configurações → Saída
+> → *Caminho de gravação*. É lá que o replay aparece.
+
+**2 · Ligue o `instant-replay.lua`.** Ferramentas → Scripts → `+` → ele
+já vem com o OBS, em `data/obs-plugins/frontend-tools/scripts/`. Esse
+script é quem carrega o arquivo recém-salvo numa Fonte de Mídia — a
+parte que nós não temos como fazer, porque a nossa página nunca vê o
+vídeo. Aponte o script para a Fonte de Mídia que ficará na cena do
+replay.
+
+**3 · Crie uma cena** só para o replay, com essa Fonte de Mídia dentro.
+
+### Depois, no painel
+
+Em **Comando do OBS**, escolha a **cena do replay**, a **cena ao vivo** e
+quantos segundos: 5, 10 ou 15. O botão muda de *VINHETA DE REPLAY* para
+**REPLAY COMPLETO · 10s**.
+
+### O que acontece quando você aperta
+
+```
+0,0s   o OBS salva o buffer  +  a cortina entra
+1,2s   com a tela coberta, corta para a cena do replay
+       (o placar some e entra o selo REPLAY)
+ +D    a cortina entra de novo
++1,2s  com a tela coberta, volta para a cena ao vivo
+```
+
+O 1,2 s não é chute: a cortina cobre a tela entre 0,78 s e 1,72 s da
+animação, e o corte acontece no meio dessa janela. É isso que faz a troca
+ficar invisível. Mexer num dos dois sem o outro quebra o efeito.
+
+O placar sai durante o replay de propósito — ele mostraria o estado de
+agora sobre uma imagem de segundos atrás.
+
+### Se faltar alguma coisa
+
+Sem as duas cenas escolhidas, o botão volta a ser só a vinheta: salva o
+buffer e toca a cortina, sem cortar. Sem OBS, toca só a cortina. Nunca
+promete o que não consegue entregar.
+
+> **O overlay precisa estar nas duas cenas.** Ele é quem conduz a
+> coreografia; se sair do ar no meio, a cortina não volta. E nessa fonte
+> **não** marque *Atualizar o navegador quando a cena se tornar ativa* —
+> isso reiniciaria a página no meio do replay.
+
 ## O que dá para comandar
 
 | no painel | no OBS |
@@ -44,6 +102,7 @@ executa a página quando ela está visível.
 | **Salvar replay no OBS** | salva o Replay Buffer |
 | **Trocar de cena** | muda a cena ativa |
 | **VINHETA DE REPLAY** | salva o buffer **e** toca a cortina juntos |
+| **REPLAY COMPLETO** | a coreografia inteira, descrita acima |
 
 As cenas são lidas do seu OBS — a lista aparece sozinha, com a que está
 no ar marcada.

@@ -574,6 +574,51 @@ t('com permissão baixa, o replay não é chamado', ()=>{
       && pouco.chamou.length===0;
 });
 
+console.log('\n── A COREOGRAFIA DO REPLAY ──');
+const seq=abrirComObs(4,['Ao vivo','Replay']);
+await new Promise(rA=>setTimeout(rA,1200));
+const seqD=seq.w.document;
+const selo=seqD.getElementById('ovSeloRep');
+t('o selo de REPLAY existe e começa escondido',
+  ()=>!!selo && selo.classList.contains('hidden'));
+
+seq.chamou.length=0;
+seq.w.obsSequenciaReplay({cenaReplay:'Replay', cenaAoVivo:'Ao vivo', segundos:2});
+t('manda salvar o buffer na hora', ()=>seq.chamou.includes('saveReplayBuffer'));
+t('a cortina entra junto', ()=>seqD.getElementById('ovRep').classList.contains('show'));
+t('mas não corta ainda: a tela ainda está limpa',
+  ()=>!seq.chamou.some(c=>c.startsWith('setCurrentScene')));
+
+await new Promise(rB=>setTimeout(rB,1400));   // passa o instante coberto
+t('com a tela coberta, corta para a cena do replay',
+  ()=>seq.chamou.includes('setCurrentScene:Replay'));
+t('e o selo REPLAY entra',  ()=>!selo.classList.contains('hidden'));
+t('o placar sai, porque estaria errado sobre o replay', ()=>{
+  const m=seq.w.novaPartida({t1:['A'],t2:['B']});
+  m.v++; seq.w.pintarOverlay(m);
+  return seqD.getElementById('bug').classList.contains('out');
+});
+
+await new Promise(rC=>setTimeout(rC,2000+1400));  // D + volta coberta
+t('no fim, volta para a cena ao vivo',
+  ()=>seq.chamou.includes('setCurrentScene:Ao vivo'));
+t('e o selo sai', ()=>selo.classList.contains('hidden'));
+t('o placar volta', ()=>{
+  const m=seq.w.novaPartida({t1:['A'],t2:['B']});
+  m.v++; seq.w.pintarOverlay(m);
+  return !seqD.getElementById('bug').classList.contains('out');
+});
+
+t('a duração é limitada, para um valor absurdo não travar a transmissão', ()=>{
+  const antes=seq.chamou.length;
+  seq.w.pararSequenciaReplay();
+  seq.w.obsSequenciaReplay({cenaReplay:'Replay',cenaAoVivo:'Ao vivo',segundos:9999});
+  seq.w.pararSequenciaReplay();
+  return true;   // não travou nem estourou
+});
+t('o instante do corte casa com a janela coberta da cortina',
+  ()=>/const COBERTO_MS=1200;/.test(html) && /replayVarre 2\.6s/.test(html));
+
 console.log('\n── PONTE COM O OBS · PAINEL ──');
 const ctrlObs=abrir('https://x/index.html',1440);
 await new Promise(r9=>setTimeout(r9,700));
@@ -617,11 +662,34 @@ t('cada recado tem id próprio, para não repetir', ()=>{
   return ctrlObs.partidaAtual().obsCmd.id!==antes;
 });
 
-// o botão de replay faz as duas coisas
+// sem cenas escolhidas: salva e toca a cortina
 ctrlObsD.getElementById('btnReplay').click();
-t('o botão de replay salva no OBS e toca a cortina', ()=>{
+t('sem cenas escolhidas, salva no OBS e toca a cortina', ()=>{
   const m=ctrlObs.partidaAtual();
   return m.replayEm>0 && m.obsCmd && m.obsCmd.acao==='replay';
+});
+
+// com as duas cenas escolhidas: a coreografia inteira
+const Mc=ctrlObs.partidaAtual();
+Mc.obsCfg={cenaReplay:'Intervalo', cenaAoVivo:'Quadra', segundos:15};
+// o clique anterior travou o botão; o rótulo só é reescrito quando ele
+// está livre, justamente para não apagar o "REPLAY NO AR…"
+ctrlObsD.getElementById('btnReplay').disabled=false;
+ctrlObs.pintarControle();
+t('com as duas cenas, o botão anuncia o replay completo',
+  ()=>ctrlObsD.getElementById('btnReplay').textContent.includes('REPLAY COMPLETO'));
+t('e mostra a duração escolhida',
+  ()=>ctrlObsD.getElementById('btnReplay').textContent.includes('15s'));
+ctrlObsD.getElementById('btnReplay').disabled=false;
+ctrlObsD.getElementById('btnReplay').click();
+t('o comando enviado é a sequência, com as cenas junto', ()=>{
+  const c=ctrlObs.partidaAtual().obsCmd;
+  return c.acao==='replaySeq' && c.cfg.cenaReplay==='Intervalo'
+      && c.cfg.cenaAoVivo==='Quadra' && c.cfg.segundos===15;
+});
+t('faltando uma cena, não promete o que não entrega', ()=>{
+  Mc.obsCfg={cenaReplay:'Intervalo', cenaAoVivo:'', segundos:10};
+  return ctrlObs.replayCompletoPronto()===false;
 });
 
 // sem OBS, o replay continua tocando a cortina

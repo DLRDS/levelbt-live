@@ -488,6 +488,14 @@
   .apo.out{animation:faixaOut .35s ease forwards;}
   @keyframes apoTroca{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:none}}
 
+  /* — SELO DE REPLAY — fica enquanto o corte roda, para ninguém achar
+       que é jogo ao vivo. O placar some junto, porque estaria errado. */
+  .selo-rep{display:flex;align-items:center;gap:12px;background:var(--orange);
+    color:var(--ink);padding:14px 22px;font-family:var(--fm);font-size:26px;
+    font-weight:700;letter-spacing:.2em;animation:faixaIn .4s cubic-bezier(.2,.8,.2,1);}
+  .selo-rep i{width:12px;height:12px;border-radius:999px;background:var(--ink);display:block;
+    animation:vivoPisca 1.4s steps(2,jump-none) infinite;}
+
   /* — PATROCÍNIO — */
   .spo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(13,13,13,.72);opacity:0;pointer-events:none;}
@@ -580,6 +588,10 @@
 
   <div class="anc br" style="right:64px;bottom:56px">
     <div class="apo hidden" id="ovApo"></div>
+  </div>
+
+  <div class="anc tr" style="right:64px;top:56px">
+    <div class="selo-rep hidden" id="ovSeloRep"><i></i>REPLAY</div>
   </div>
 
   <div class="anc tr" style="right:64px;top:300px">
