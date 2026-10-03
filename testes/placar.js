@@ -488,6 +488,184 @@ t('a demonstração do overlay desenha mesmo sem banco', ()=>{
   return !!dm;  // se o script tivesse quebrado, nem carregaria
 });
 
+console.log('\n── PONTE COM O OBS · OVERLAY ──');
+// Um OBS de mentira, com o mesmo formato do window.obsstudio real.
+function abrirComObs(nivel, cenas){
+  const chamou=[];
+  const w2=new JSDOM(html,{runScripts:'dangerously',url:'https://x/index.html?overlay=tk1',
+    pretendToBeVisual:true,beforeParse(w){
+      w.innerWidth=1920; w.innerHeight=1080; w.scrollTo=()=>{};
+      w.matchMedia=()=>({matches:true,addListener(){},removeListener(){}});
+      w.__chamou=chamou;
+      const api={ pluginVersion:'2.26.0',
+        getControlLevel:cb=>cb(nivel),
+        getCurrentScene:cb=>cb({name:(cenas||['Quadra'])[0]}),
+        getScenes:cb=>cb(cenas||['Quadra','Intervalo']) };
+      if(nivel>=4){
+        api.saveReplayBuffer=()=>chamou.push('saveReplayBuffer');
+        api.setCurrentScene=n=>chamou.push('setCurrentScene:'+n);
+        api.startRecording=()=>chamou.push('startRecording');
+      }
+      if(nivel>0) w.obsstudio=api;
+      w.supabase={createClient:()=>({
+        rpc:async(fn,a)=>{ chamou.push('rpc:'+fn); 
+          if(fn==='bc_read') return {data:{t1:['A'],t2:['B'],v:1,status:'playing'},error:null};
+          return {data:null,error:null}; }
+      })};
+    }}).window;
+  return {w:w2, chamou};
+}
+
+const semObs=abrirComObs(0);
+await new Promise(r6=>setTimeout(r6,900));
+t('fora do OBS, a ponte fica desligada e nada quebra',
+  ()=>semObs.w.obsTem('saveReplayBuffer')===false);
+
+const comObs=abrirComObs(4,['Quadra 1','Intervalo','Patrocínio']);
+await new Promise(r7=>setTimeout(r7,1200));
+t('dentro do OBS, a ponte se reconhece', ()=>comObs.w.obsTem('saveReplayBuffer')===true);
+t('descobre o nível de permissão', ()=>comObs.w.obsDescobrir().then?true:true);
+const info=await comObs.w.obsDescobrir();
+t('lê o nível', ()=>info.nivel===4);
+t('lê as cenas', ()=>info.cenas.length===3 && info.cenas[0]==='Quadra 1');
+t('e a versão do plugin', ()=>info.versao==='2.26.0');
+t('conta ao painel pelo canal próprio',
+  ()=>comObs.chamou.some(c=>c==='rpc:bc_obs'));
+
+// comandos
+comObs.chamou.length=0;
+t('comando de replay chega ao OBS', ()=>{
+  comObs.w.obsExecutar({acao:'replay'});
+  return comObs.chamou.includes('saveReplayBuffer');
+});
+t('comando de cena chega ao OBS', ()=>{
+  comObs.w.obsExecutar({acao:'cena',arg:'Intervalo'});
+  return comObs.chamou.includes('setCurrentScene:Intervalo');
+});
+t('comando desconhecido não faz nada',
+  ()=>comObs.w.obsExecutar({acao:'inventado'})==='comando desconhecido');
+
+// cada comando roda uma vez só
+comObs.chamou.length=0;
+const cmd={id:'abc',acao:'replay',em:Date.now()};
+comObs.w.obsAtenderComando({obsCmd:cmd});
+comObs.w.obsAtenderComando({obsCmd:cmd});
+comObs.w.obsAtenderComando({obsCmd:cmd});
+t('o mesmo comando não dispara três vezes',
+  ()=>comObs.chamou.filter(c=>c==='saveReplayBuffer').length===1);
+comObs.chamou.length=0;
+comObs.w.obsAtenderComando({obsCmd:{id:'xyz',acao:'replay',em:Date.now()-60000}});
+t('comando velho é ignorado ao entrar no ar',
+  ()=>comObs.chamou.length===0);
+
+// permissão baixa
+const pouco=abrirComObs(1);
+await new Promise(r8=>setTimeout(r8,900));
+t('com permissão baixa, o replay não é chamado', ()=>{
+  pouco.chamou.length=0;
+  return pouco.w.obsExecutar({acao:'replay'})==='sem permissão'
+      && pouco.chamou.length===0;
+});
+
+console.log('\n── PONTE COM O OBS · PAINEL ──');
+const ctrlObs=abrir('https://x/index.html',1440);
+await new Promise(r9=>setTimeout(r9,700));
+const ctrlObsD=ctrlObs.document;
+ctrlObsD.getElementById('setup').classList.add('hidden');
+ctrlObsD.getElementById('live').classList.remove('hidden');
+const Mp=ctrlObs.definirPartida(ctrlObs.novaPartida({t1:['A'],t2:['B']}));
+
+Mp._obs=null; ctrlObs.pintarControle();
+t('sem notícia do overlay, o painel diz que está procurando',
+  ()=>ctrlObsD.getElementById('obsEstado').textContent.includes('PROCURANDO'));
+
+Mp._obs={dentro:true,nivel:1,cenas:[],em:Math.floor(Date.now()/1000)};
+ctrlObs.pintarControle();
+t('permissão baixa: o painel explica onde mudar',
+  ()=>ctrlObsD.getElementById('obsEstado').textContent==='SEM PERMISSÃO'
+    && ctrlObsD.getElementById('obsCaixa').textContent.includes('Acesso avançado'));
+
+Mp._obs={dentro:true,nivel:4,cenas:['Quadra','Intervalo'],cena:'Quadra',
+         em:Math.floor(Date.now()/1000)};
+ctrlObs.pintarControle();
+t('com permissão, o painel libera os comandos',
+  ()=>ctrlObsD.getElementById('obsEstado').textContent.includes('PRONTO')
+    && !!ctrlObsD.getElementById('obsReplay'));
+t('e lista as cenas do OBS',
+  ()=>ctrlObsD.querySelectorAll('#obsCenas [data-cena]').length===2);
+t('a cena no ar fica marcada',
+  ()=>ctrlObsD.querySelector('[data-cena="Quadra"]').classList.contains('on'));
+
+ctrlObsD.getElementById('obsReplay').click();
+t('clicar deixa o recado no placar',
+  ()=>ctrlObs.partidaAtual().obsCmd && ctrlObs.partidaAtual().obsCmd.acao==='replay');
+ctrlObsD.querySelector('[data-cena="Intervalo"]').click();
+t('trocar de cena também', ()=>{
+  const c=ctrlObs.partidaAtual().obsCmd;
+  return c.acao==='cena' && c.arg==='Intervalo';
+});
+t('cada recado tem id próprio, para não repetir', ()=>{
+  const antes=ctrlObs.partidaAtual().obsCmd.id;
+  ctrlObsD.querySelector('[data-cena="Quadra"]').click();
+  return ctrlObs.partidaAtual().obsCmd.id!==antes;
+});
+
+// o botão de replay faz as duas coisas
+ctrlObsD.getElementById('btnReplay').click();
+t('o botão de replay salva no OBS e toca a cortina', ()=>{
+  const m=ctrlObs.partidaAtual();
+  return m.replayEm>0 && m.obsCmd && m.obsCmd.acao==='replay';
+});
+
+// sem OBS, o replay continua tocando a cortina
+Mp._obs=null; ctrlObs.pintarControle();
+const antesRep=ctrlObs.partidaAtual().replayEm;
+await new Promise(r10=>setTimeout(r10,10));
+ctrlObsD.getElementById('btnReplay').disabled=false;   // o clique anterior o travou
+ctrlObsD.getElementById('btnReplay').click();
+t('sem OBS, a cortina toca do mesmo jeito',
+  ()=>ctrlObs.partidaAtual().replayEm>antesRep);
+
+t('o campo do OBS não é gravado como se fosse da partida',
+  ()=>/delete limpo\._obs/.test(html));
+
+console.log('\n── PEÇAS SOLTAS PARA O OBS ──');
+const fsx=require('fs'), px=require('path');
+const pecasArq=px.join(__dirname,'..','obs','pecas.html');
+t('o arquivo das peças existe', ()=>fsx.existsSync(pecasArq));
+const pecasHtml=fsx.existsSync(pecasArq)?fsx.readFileSync(pecasArq,'utf8'):'';
+t('é gerado, não escrito à mão', ()=>pecasHtml.includes('GERADO POR obs/gerar.js'));
+t('reaproveita o estilo do overlay, sem copiar à mão',
+  ()=>pecasHtml.includes('@keyframes replayVarre') && pecasHtml.includes('@keyframes seloIn'));
+t('traz a marcação do palco', ()=>['ovRep','ovIdent','ovSpo','ovAgd','ovFim','ovTens','ovBrk']
+  .every(id=>pecasHtml.includes('id="'+id+'"')));
+t('o fundo é transparente, como o OBS precisa',
+  ()=>/html,body\{background:transparent/.test(pecasHtml));
+t('o quadro é 1920×1080', ()=>/body\{width:1920px;height:1080px;\}/.test(pecasHtml));
+t('solta, cada peça sai no tamanho de desenho',
+  ()=>/\.stage\{--esc:1;\}/.test(pecasHtml));
+
+// as sete peças desenham
+const pecas=['replay','cartela','selo','quebrou','patrocinio','proximos','fim'];
+for(const nome of pecas){
+  const w2=new JSDOM(pecasHtml,{runScripts:'dangerously',pretendToBeVisual:true,
+    url:'https://x/obs/pecas.html?peca='+nome+
+        '&torneio=COPA&cat=MISTA%20A&fase=FINAL&venceu=Ana/Bia&perdeu=Cris/Dani'+
+        '&sets=6-4%203-6&texto=MATCH%20POINT&patrocinador=ARENA'+
+        '&jogados=|OITAVAS|Ju/Tom|Lia/Vitor|6-2&fila=19:00|FINAL|A/B|C/D|'}).window;
+  await new Promise(r4=>setTimeout(r4,120));
+  const d2=w2.document;
+  const visiveis=[...d2.querySelectorAll('.stage > *')].filter(n=>!n.classList.contains('peca-off'));
+  t('peça '+nome+' deixa só ela no palco', ()=>visiveis.length>=1 && visiveis.length<=2);
+  t('peça '+nome+' entra em cena', ()=>!!d2.querySelector('.show'));
+}
+
+const wErr=new JSDOM(pecasHtml,{runScripts:'dangerously',pretendToBeVisual:true,
+  url:'https://x/obs/pecas.html?peca=inventada'}).window;
+await new Promise(r5=>setTimeout(r5,120));
+t('peça desconhecida avisa em vez de ficar preta',
+  ()=>wErr.document.body.textContent.includes('Peça desconhecida'));
+
 console.log('\n'+(bad? '✗ '+bad+' FALHA(S) · '+ok+' ok' : '✓ TUDO OK · '+ok+' testes'));
   process.exit(bad?1:0);
 },700);

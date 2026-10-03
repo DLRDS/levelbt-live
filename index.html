@@ -774,6 +774,12 @@
         <button class="cenab disparo" id="btnReplay">VINHETA DE REPLAY<span class="tecla">R</span></button>
       </div>
 
+      <div class="stack" style="gap:10px">
+        <div class="row"><div class="mono">Comando do OBS</div>
+          <div class="mono" id="obsEstado">PROCURANDO…</div></div>
+        <div id="obsCaixa" class="stack" style="gap:8px"></div>
+      </div>
+
       <button class="btn btn-q btn-full" id="btnLink">Ver link do OBS</button>
       <div class="grid2">
         <button class="btn btn-q" id="btnNova">Nova transmissão</button>
@@ -1334,15 +1340,118 @@ function tensao(m){
 }
 
 // ── Sincronização ────────────────────────────────────────────
+// O painel escreve o placar, mas só o overlay escreve o campo _obs.
+// Então de tempos em tempos a gente relê para saber o que ele descobriu.
+async function lerDeVolta(){
+  if(!supa || !tokenPub || !M) return;
+  try{
+    const {data}=await supa.rpc('bc_read',{p_token:tokenPub});
+    if(data && data._obs){
+      const antes=JSON.stringify(M._obs||null);
+      M._obs=data._obs;
+      if(antes!==JSON.stringify(M._obs)) pintarObs();
+    }
+  }catch(e){}
+}
+
 async function publicar(){
   if(!supa||!ctrlKey||!M) return;
   try{ localStorage.setItem('lbt_bc',JSON.stringify({token:tokenPub,key:ctrlKey})); }catch(e){}
   try{
-    await supa.rpc('bc_write',{p_control_key:ctrlKey,p_payload:M});
+    const limpo=Object.assign({},M); delete limpo._obs;
+    await supa.rpc('bc_write',{p_control_key:ctrlKey,p_payload:limpo});
     const el=$('syncMsg'); if(el) el.textContent='Sincronizado · '+new Date().toLocaleTimeString('pt-BR');
   }catch(e){
     const el=$('syncMsg'); if(el) el.textContent='Falha ao sincronizar. Tentando de novo…';
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PONTE COM O OBS
+//
+// Quando esta página roda como Fonte de Navegador, o OBS injeta um
+// objeto window.obsstudio. É por ele que dá para mandar o OBS salvar o
+// replay, trocar de cena ou gravar — sem rede, sem WebSocket.
+//
+// Isso resolve um problema que não tinha saída pelo outro caminho: a
+// página de controle está em HTTPS e o navegador proíbe HTTPS falar com
+// ws://localhost. Mas o overlay JÁ ESTÁ dentro do OBS, então não
+// precisa de rede nenhuma. O celular manda pelo banco, o overlay repassa.
+//
+// O nível de permissão é escolhido por você nas propriedades da fonte.
+// Sem nível suficiente, as funções simplesmente não existem — por isso
+// cada chamada é testada antes, nunca assumida.
+// ══════════════════════════════════════════════════════════════════
+const OBS = (typeof window!=='undefined' && window.obsstudio) ? window.obsstudio : null;
+let obsInfo={dentro:!!OBS, nivel:0, versao:'', cenas:[], cena:''};
+let ultimoObsCmd=null;
+
+function obsTem(fn){ return !!(OBS && typeof OBS[fn]==='function'); }
+
+// Pergunta ao OBS o que ele permite. Cada resposta vem por callback, e
+// nenhuma delas é garantida — daí os try e os valores de partida.
+function obsDescobrir(){
+  return new Promise(resolve=>{
+    if(!OBS){ resolve(obsInfo); return; }
+    obsInfo.versao = String(OBS.pluginVersion||'');
+    let faltam=3;
+    const pronto=()=>{ if(--faltam<=0) resolve(obsInfo); };
+    const tentar=(fn,cb)=>{
+      if(!obsTem(fn)){ pronto(); return; }
+      try{ OBS[fn](v=>{ try{ cb(v); }catch(e){} pronto(); }); }
+      catch(e){ pronto(); }
+    };
+    tentar('getControlLevel', n=>{ obsInfo.nivel=Number(n)||0; });
+    tentar('getCurrentScene', c=>{ obsInfo.cena=(c&&(c.name||c))||''; });
+    tentar('getScenes',       l=>{ obsInfo.cenas=Array.isArray(l)?l.slice(0,40):[]; });
+    // se nenhum callback voltar, não trava o resto
+    setTimeout(()=>resolve(obsInfo), 1500);
+  });
+}
+
+// Conta ao painel o que achou. É o único momento em que o overlay
+// escreve no banco, e vai para uma coluna que não encosta no placar.
+async function obsReportar(){
+  if(!supa || !OVERLAY_TOKEN || OVERLAY_TOKEN==='demo') return;
+  try{ await supa.rpc('bc_obs',{p_token:OVERLAY_TOKEN, p_info:obsInfo}); }
+  catch(e){ /* banco sem a função ainda: segue sem a ponte */ }
+}
+
+// Executa um comando vindo do painel. Devolve o que aconteceu, para o
+// caso de um dia querermos mostrar isso de volta.
+function obsExecutar(cmd){
+  if(!OBS || !cmd || !cmd.acao) return 'sem obs';
+  try{
+    switch(cmd.acao){
+      case 'replay':
+        if(!obsTem('saveReplayBuffer')) return 'sem permissão';
+        OBS.saveReplayBuffer(); return 'ok';
+      case 'cena':
+        if(!obsTem('setCurrentScene') || !cmd.arg) return 'sem permissão';
+        OBS.setCurrentScene(cmd.arg); return 'ok';
+      case 'gravarIniciar':
+        if(!obsTem('startRecording')) return 'sem permissão';
+        OBS.startRecording(); return 'ok';
+      case 'gravarParar':
+        if(!obsTem('stopRecording')) return 'sem permissão';
+        OBS.stopRecording(); return 'ok';
+      case 'bufferIniciar':
+        if(!obsTem('startReplayBuffer')) return 'sem permissão';
+        OBS.startReplayBuffer(); return 'ok';
+      default: return 'comando desconhecido';
+    }
+  }catch(e){ return 'erro: '+(e.message||e); }
+}
+
+// Cada comando carrega um id. O overlay roda uma vez por id, então
+// reler o mesmo placar dez vezes não dispara dez replays.
+function obsAtenderComando(m){
+  const cmd = m && m.obsCmd;
+  if(!cmd || !cmd.id || cmd.id===ultimoObsCmd) return;
+  ultimoObsCmd = cmd.id;
+  // comando velho (overlay entrou no ar depois) não executa
+  if(cmd.em && Date.now()-cmd.em > 20000) return;
+  obsExecutar(cmd);
 }
 
 // ══════════════ MODO OVERLAY ══════════════
@@ -1454,6 +1563,8 @@ function pintarOverlay(m){
   // — vinheta de replay: uma passada só, disparada por carimbo de hora —
   // Não é cena, é evento. Assim o overlay toca a cortina inteira mesmo que
   // só veja o comando alguns décimos depois de o controle ter apertado.
+  obsAtenderComando(m);
+
   const rEm=m.replayEm||0;
   if(rEm && rEm!==ultimoReplay){
     ultimoReplay=rEm;
@@ -1740,6 +1851,73 @@ function tirarPatrocinio(i){
   gravarPatrocinios(M.patrocinios); M.v++; pintarControle(); publicar();
 }
 
+// ══════════════════════════════════════════════════════════════════
+// COMANDO DO OBS, VISTO DO PAINEL
+//
+// Quem fala com o OBS é o overlay, que roda dentro dele. Daqui a gente
+// só deixa um recado no placar — o overlay lê e repassa. Por isso há
+// sempre um atraso de até um segundo, que é o tempo de ele reler.
+//
+// O nível de permissão vem do próprio OBS:
+//   0 nenhum · 1 lê status · 2 lê usuário · 3 básico · 4 avançado · 5 tudo
+// Replay e troca de cena pedem avançado.
+// ══════════════════════════════════════════════════════════════════
+const OBS_NIVEL_AVANCADO=4;
+function obsDoPlacar(){ return (M && M._obs) || null; }
+function obsVivo(){
+  const o=obsDoPlacar();
+  // o overlay reporta de minuto em minuto; sem notícia há 3, está fora
+  return !!(o && o.dentro && o.em && (Date.now()/1000 - o.em) < 180);
+}
+function obsPode(){ const o=obsDoPlacar(); return obsVivo() && (o.nivel||0) >= OBS_NIVEL_AVANCADO; }
+
+function mandarAoObs(acao, arg){
+  if(!M) return false;
+  M.obsCmd={ id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+             acao, arg:arg||'', em:Date.now() };
+  M.v++; publicar();
+  return true;
+}
+
+function pintarObs(){
+  const cx=$('obsCaixa'), est=$('obsEstado');
+  if(!cx||!est) return;
+  const o=obsDoPlacar();
+
+  if(!obsVivo()){
+    est.textContent = o ? 'FORA DO AR' : 'PROCURANDO…';
+    cx.innerHTML='<div class="body-sm">O overlay ainda não respondeu de dentro do OBS. '+
+      'Confira se a fonte de navegador está numa cena ativa.</div>';
+    return;
+  }
+  if(!obsPode()){
+    est.textContent='SEM PERMISSÃO';
+    cx.innerHTML='<div class="body-sm">O OBS está ali, mas a fonte do overlay está com '+
+      'permissão baixa (nível '+(o.nivel||0)+').<br>'+
+      'No OBS: clique com o botão direito na fonte do overlay → <b>Propriedades</b> → '+
+      'em <b>Controle da página</b>, escolha <b>Acesso avançado</b>.</div>';
+    return;
+  }
+
+  est.textContent='PRONTO · NÍVEL '+o.nivel;
+  const cenas=Array.isArray(o.cenas)?o.cenas:[];
+  cx.innerHTML =
+    '<button class="btn btn-q btn-full" id="obsReplay">Salvar replay no OBS</button>'+
+    (cenas.length
+      ? '<div class="mono" style="margin-top:4px">Trocar de cena</div>'+
+        '<div class="cenas" id="obsCenas">'+
+        cenas.map(c=>`<button class="cenab ${c===o.cena?'on':''}" data-cena="${esc(c)}">${esc(c)}</button>`).join('')+
+        '</div>'
+      : '<div class="body-sm">O OBS não listou as cenas.</div>');
+
+  $('obsReplay').onclick=()=>{
+    mandarAoObs('replay');
+    const b=$('obsReplay'); b.disabled=true; b.textContent='Salvando…';
+    setTimeout(()=>{ b.disabled=false; b.textContent='Salvar replay no OBS'; },2500);
+  };
+  cx.querySelectorAll('[data-cena]').forEach(b=>b.onclick=()=>mandarAoObs('cena', b.dataset.cena));
+}
+
 function tirarDaFila(i){
   if(!M||!Array.isArray(M.agenda)) return;
   M.agenda.splice(i,1);
@@ -1751,6 +1929,7 @@ function pintarControle(){
   pintarAgendaLista(m.agenda);
   pintarPatrocinios(m.patrocinios);
   pintarPreview();
+  pintarObs();
   $('liveMeta').textContent=[m.cat,m.fase].filter(Boolean).join(' · ').toUpperCase()||'PARTIDA';
   const t=tensao(m);
   $('liveState').textContent = m.status==='finished' ? 'ENCERRADA'
@@ -1800,7 +1979,9 @@ function pintarControle(){
 
   // cena ativa
   const cena=m.cena||'placar';
-  document.querySelectorAll('.cenab').forEach(b=>b.classList.toggle('on',b.dataset.c===cena));
+  // só a botoeira da transmissão — os botões de cena do OBS usam a mesma
+  // classe e eram apagados por este laço
+  document.querySelectorAll('#cenas .cenab').forEach(b=>b.classList.toggle('on',b.dataset.c===cena));
 }
 function esc(s){ return String(s??'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -1893,9 +2074,16 @@ function ligarControle(){
   $('btnLink').onclick=()=>{ $('linkbox').classList.toggle('hidden'); atualizarVoltar(); };
   document.querySelectorAll('.cenab[data-c]').forEach(b=>b.onclick=()=>setCena(b.dataset.c));
   $('btnReplay').onclick=()=>{
-    M.replayEm=Date.now(); M.v++; publicar();
+    // Um botão, duas coisas: o OBS salva os últimos segundos e a cortina
+    // entra para cobrir o corte. Antes eram dois atalhos em sequência.
+    M.replayEm=Date.now();
+    if(obsPode()){
+      M.obsCmd={ id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+                 acao:'replay', arg:'', em:Date.now() };
+    }
+    M.v++; publicar();
     const b=$('btnReplay'), t=b.textContent;
-    b.disabled=true; b.textContent='NO AR…';
+    b.disabled=true; b.textContent = obsPode() ? 'SALVANDO E NO AR…' : 'NO AR…';
     setTimeout(()=>{ b.disabled=false; b.textContent=t; }, REPLAY_MS);
   };
   $('spArq').onchange=async e=>{
@@ -1964,6 +2152,9 @@ function ligarControle(){
       $('btnCopy').textContent='Copiado'; setTimeout(()=>$('btnCopy').textContent='Copiar link',1600);
     }catch(e){ $('ovUrl').select(); } };
   $('btnOpen').onclick=()=>window.open($('ovUrl').value,'_blank');
+  // o overlay reporta o OBS numa coluna à parte; relemos para saber
+  setInterval(lerDeVolta, 4000);
+
   // os dois relógios andam sozinhos, sem esperar o banco responder
   setInterval(()=>{
     if(!M) return;
@@ -2196,6 +2387,10 @@ if(OVERLAY_TOKEN){
   document.body.classList.add('ov');
   $('stage').classList.remove('hidden');
   escalar(); addEventListener('resize',escalar);
+  // descobre o que o OBS permite e conta ao painel; repete de minuto em
+  // minuto porque você pode mudar a permissão com a fonte já no ar
+  obsDescobrir().then(obsReportar);
+  setInterval(()=>obsDescobrir().then(obsReportar), 60000);
   // o relógio anda sozinho, sem depender da próxima resposta do banco
   setInterval(()=>{
     const el=$('ovTempo');
