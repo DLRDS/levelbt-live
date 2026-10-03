@@ -532,6 +532,13 @@ t('e a versão do plugin', ()=>info.versao==='2.26.0');
 t('conta ao painel pelo canal próprio',
   ()=>comObs.chamou.some(c=>c==='rpc:bc_obs'));
 
+// Regressão: o preview da live roda o overlay num iframe, com o mesmo
+// token, FORA do OBS. Se ele reportasse, apagaria o que o OBS contou.
+t('fora do OBS, o overlay fica calado em vez de reportar nível zero',
+  ()=>!semObs.chamou.some(c=>c==='rpc:bc_obs'));
+t('e a guarda está no código, não por acaso',
+  ()=>/if\(!OBS\) return;/.test(html));
+
 // comandos
 comObs.chamou.length=0;
 t('comando de replay chega ao OBS', ()=>{

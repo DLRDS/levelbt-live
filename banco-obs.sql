@@ -18,6 +18,10 @@
 --   O estrago é cosmético: o painel mostraria capacidade que não existe,
 --   e o comando simplesmente não funcionaria. Nada do placar se perde.
 --
+--   O que NÃO dá: mandar tipo errado e derrubar a função, forjar a hora
+--   do último contato, ou escrever campo que não está na lista. Testado
+--   contra o banco de verdade.
+--
 -- Rode DEPOIS do banco.sql. É seguro rodar mais de uma vez.
 -- ══════════════════════════════════════════════════════════════════
 
@@ -36,10 +40,23 @@ declare
   v_limpo jsonb;
   v_n int;
 begin
+  if p_info is null or jsonb_typeof(p_info) <> 'object' then
+    return false;
+  end if;
+
   v_limpo := jsonb_build_object(
-    'dentro', coalesce((p_info->>'dentro')::boolean, false),
-    'nivel',  coalesce((p_info->>'nivel')::int, 0),
+    -- comparação de jsonb, sem cast: qualquer coisa que não seja true
+    -- vira false. Com ::boolean direto, um "sim" derrubava a função
+    -- inteira em vez de ser descartado.
+    'dentro', (p_info->'dentro' = 'true'::jsonb),
+
+    -- só converte se for mesmo um número, e prende entre 0 e 5
+    'nivel',  case when jsonb_typeof(p_info->'nivel')='number'
+                   then least(greatest(floor((p_info->>'nivel')::numeric)::int, 0), 5)
+                   else 0 end,
+
     'versao', left(coalesce(p_info->>'versao',''), 40),
+
     'cenas',  coalesce(
                 (select jsonb_agg(left(x,60))
                    from (select jsonb_array_elements_text(
@@ -47,7 +64,10 @@ begin
                                 then p_info->'cenas' else '[]'::jsonb end) as x
                          limit 40) t),
                 '[]'::jsonb),
+
     'cena',   left(coalesce(p_info->>'cena',''), 60),
+
+    -- a hora é sempre do servidor: não dá para forjar "visto agora"
     'em',     extract(epoch from now())::bigint
   );
 

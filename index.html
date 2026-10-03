@@ -1413,6 +1413,16 @@ function obsDescobrir(){
 // escreve no banco, e vai para uma coluna que não encosta no placar.
 async function obsReportar(){
   if(!supa || !OVERLAY_TOKEN || OVERLAY_TOKEN==='demo') return;
+  // SÓ reporta quem está mesmo dentro do OBS.
+  //
+  // O preview da live, no painel de controle, roda este mesmo arquivo em
+  // modo overlay dentro de um iframe — com o mesmo token. Sem esta linha
+  // ele também reportava, dizendo "não estou no OBS, nível 0", e
+  // sobrescrevia o que o OBS de verdade tinha acabado de contar. Os dois
+  // disputavam a mesma linha e o último a falar vencia.
+  //
+  // Silêncio já significa "não achei o OBS": o painel mostra PROCURANDO.
+  if(!OBS) return;
   try{ await supa.rpc('bc_obs',{p_token:OVERLAY_TOKEN, p_info:obsInfo}); }
   catch(e){ /* banco sem a função ainda: segue sem a ponte */ }
 }
