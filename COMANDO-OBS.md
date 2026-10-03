@@ -47,7 +47,8 @@ retorna. Você aperta uma vez e não toca em mais nada.
 
 **1 · Ligue o Replay Buffer.** Configurações → Saída → marque *Habilitar
 buffer de repetição* e escolha quantos segundos guardar (15 dá folga).
-Depois ligue o buffer na janela principal.
+Depois **ligue o buffer na janela principal** — é um botão separado, e
+sem ele não existe nada para salvar.
 
 > Os arquivos vão para a mesma pasta da gravação — Configurações → Saída
 > → *Caminho de gravação*. É lá que o replay aparece.
@@ -55,11 +56,19 @@ Depois ligue o buffer na janela principal.
 **2 · Crie a cena do replay** com uma **Fonte de Mídia** dentro. Pode
 deixá-la vazia; quem vai preencher é o script do passo seguinte. Nas
 propriedades dela, marque *Reiniciar a reprodução quando a fonte ficar
-ativa*.
+ativa* e **desmarque *Repetir*** (o script também desliga o laço, mas
+melhor não depender disso).
 
 **3 · Ligue o `obs/levelbt-replay.lua`.** Ferramentas → Scripts → `+` →
 escolha o arquivo em `obs/levelbt-replay.lua` deste repositório. Em
 **Fonte de Mídia**, escolha a fonte que você acabou de criar.
+
+> **Confira antes de precisar.** Salve um replay à mão (o atalho do OBS,
+> ou o botão *Salvar replay* na janela principal) e aperte **Carregar o
+> último replay agora** nas propriedades do script. Se a fonte continuar
+> vazia, abra **Ferramentas → Scripts → aba *Log do script***: cada etapa
+> escreve ali, e a mensagem diz exatamente o que faltou — fonte não
+> escolhida, buffer desligado, ou fonte do tipo errado.
 
 > **Por que não o `instant-replay.lua` que vem com o OBS?** Porque ele
 > pendura tudo num atalho de teclado próprio: o mesmo atalho salva o
@@ -77,6 +86,23 @@ escolha o arquivo em `obs/levelbt-replay.lua` deste repositório. Em
 Em **Comando do OBS**, escolha a **cena do replay**, a **cena ao vivo** e
 quantos segundos: 5, 10 ou 15. O botão muda de *VINHETA DE REPLAY* para
 **REPLAY COMPLETO · 10s**.
+
+> **Esses segundos não podem passar do tamanho do buffer.** Se o buffer
+> guarda 5 s e você escolher 15, o clipe tem 5 s e a cena fica 15 s no ar:
+> ou ele toca e congela, ou — se *Repetir* estiver marcado na Fonte de
+> Mídia — toca três vezes seguidas.
+
+### O que o replay mostra
+
+O Replay Buffer grava a **saída do programa**: o que foi ao ar. Então ele
+já traz a câmera, ou o arquivo, ou o que estivesse na cena ao vivo — com
+o placar queimado na imagem, porque o placar também estava no ar.
+
+Não há onde escolher a fonte: quem grava é o OBS, não o script. Para o
+replay sair **limpo**, de uma fonte isolada, seria preciso um plugin de
+gravação por fonte (*Source Record*), que grava um arquivo por fonte em
+paralelo. É um caminho diferente deste, e dá para montar depois se o
+placar queimado incomodar.
 
 ### O que acontece quando você aperta
 
@@ -112,6 +138,12 @@ promete o que não consegue entregar.
 > coreografia; se sair do ar no meio, a cortina não volta. E nessa fonte
 > **não** marque *Atualizar o navegador quando a cena se tornar ativa* —
 > isso reiniciaria a página no meio do replay.
+>
+> Estar em duas cenas significa duas páginas do overlay rodando, cada uma
+> lendo o mesmo recado. O comando é consumido uma vez por máquina, não uma
+> vez por página: o id fica anotado no armazenamento local, que todas as
+> fontes de navegador do OBS dividem. Sem isso, cada instância disparava a
+> coreografia de novo.
 
 ## O que dá para comandar
 

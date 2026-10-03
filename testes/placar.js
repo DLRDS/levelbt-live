@@ -490,10 +490,14 @@ t('a demonstração do overlay desenha mesmo sem banco', ()=>{
 
 console.log('\n── PONTE COM O OBS · OVERLAY ──');
 // Um OBS de mentira, com o mesmo formato do window.obsstudio real.
-function abrirComObs(nivel, cenas){
+function abrirComObs(nivel, cenas, armazem){
   const chamou=[];
   const w2=new JSDOM(html,{runScripts:'dangerously',url:'https://x/index.html?overlay=tk1',
     pretendToBeVisual:true,beforeParse(w){
+      // No OBS, todas as fontes de navegador dividem o mesmo perfil, logo o
+      // mesmo localStorage. Aqui dá para simular isso passando o mesmo
+      // objeto para duas janelas.
+      if(armazem) Object.defineProperty(w,'localStorage',{value:armazem,configurable:true});
       w.innerWidth=1920; w.innerHeight=1080; w.scrollTo=()=>{};
       w.matchMedia=()=>({matches:true,addListener(){},removeListener(){}});
       w.__chamou=chamou;
@@ -564,6 +568,41 @@ comObs.chamou.length=0;
 comObs.w.obsAtenderComando({obsCmd:{id:'xyz',acao:'replay',em:Date.now()-60000}});
 t('comando velho é ignorado ao entrar no ar',
   ()=>comObs.chamou.length===0);
+
+// ── O BUG DAS TRÊS VEZES ──────────────────────────────────────────
+// O overlay fica na cena ao vivo E na cena do replay, e a fonte pode
+// recarregar ao trocar de cena. Cada instância nasce com a memória limpa,
+// lê o mesmo comando ainda válido e dispara a coreografia de novo. Eram
+// três disparos: um por instância. O guarda tem de ser da MÁQUINA.
+const dados=new Map();
+const armazemOBS={
+  getItem:k=>dados.has(k)?dados.get(k):null,
+  setItem:(k,v)=>dados.set(k,String(v)),
+  removeItem:k=>dados.delete(k), clear:()=>dados.clear()
+};
+const cena1=abrirComObs(4,['Quadra 1','Intervalo'],armazemOBS);
+const cena2=abrirComObs(4,['Quadra 1','Intervalo'],armazemOBS);
+await new Promise(r8b=>setTimeout(r8b,1200));
+cena1.chamou.length=0; cena2.chamou.length=0;
+const umSo={id:'tresvezes',acao:'replay',em:Date.now()};
+cena1.w.obsAtenderComando({obsCmd:umSo});
+cena2.w.obsAtenderComando({obsCmd:umSo});
+t('duas instâncias do overlay no OBS gastam o comando UMA vez', ()=>
+  cena1.chamou.filter(c=>c==='saveReplayBuffer').length +
+  cena2.chamou.filter(c=>c==='saveReplayBuffer').length === 1);
+
+// e sobrevive a recarregar a página, que é o outro caminho do mesmo bug
+const cena3=abrirComObs(4,['Quadra 1','Intervalo'],armazemOBS);
+await new Promise(r8c=>setTimeout(r8c,1200));
+cena3.chamou.length=0;
+cena3.w.obsAtenderComando({obsCmd:umSo});
+t('e a fonte recarregada não repete o replay',
+  ()=>cena3.chamou.filter(c=>c==='saveReplayBuffer').length===0);
+
+// Fora do OBS ninguém gasta comando de ninguém: o preview do painel roda
+// este mesmo arquivo, e no mesmo navegador do painel.
+t('o preview, fora do OBS, não consome o comando do OBS',
+  ()=>/function marcarCmdUsado[\s\S]{0,200}if\(!OBS\) return;/.test(html));
 
 // permissão baixa
 const pouco=abrirComObs(1);
@@ -642,7 +681,22 @@ t('aguenta o arquivo demorar, em vez de supor um tempo',
 t('sabe lidar com Fonte de Mídia e com VLC',
   ()=>lua.includes('ffmpeg_source') && lua.includes('vlc_source'));
 t('avisa no log quando a fonte não existe',
-  ()=>lua.includes('nao achei a Fonte de Midia'));
+  ()=>lua.includes("nao achei fonte chamada"));
+// Cada um destes era um caminho de falha SILENCIOSA: o script desistia e
+// a Fonte de Mídia ficava vazia sem uma linha de explicação. Foi o que
+// aconteceu na prática.
+t('avisa quando nenhuma fonte foi escolhida',
+  ()=>lua.includes('nenhuma Fonte de Midia escolhida'));
+t('avisa quando o Replay Buffer está desligado',
+  ()=>lua.includes('Replay Buffer nao existe')
+    && lua.includes('nenhum replay salvo ainda'));
+t('tem botão de conferência, para testar sem a coreografia',
+  ()=>lua.includes('obs_properties_add_button')
+    && lua.includes('botao_agora'));
+t('manda a mídia tocar uma vez, não em laço',
+  ()=>/obs_data_set_bool\(ajustes, "looping", false\)/.test(lua));
+t('não empilha callback ao recarregar o script',
+  ()=>lua.includes('obs_frontend_remove_event_callback'));
 
 console.log('\n── PONTE COM O OBS · PAINEL ──');
 const ctrlObs=abrir('https://x/index.html',1440);

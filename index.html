@@ -1483,9 +1483,14 @@ function obsExecutar(cmd){
 // 1,72s da animação. Cortar no meio dessa janela é o que faz o corte
 // ficar invisível. Mexer num dos dois sem o outro quebra o efeito.
 //
-// Quem toca o arquivo é o OBS — o script instant-replay.lua, que vem
-// com ele, carrega o vídeo recém-salvo numa Fonte de Mídia. Essa parte
-// a gente não tem como fazer: a página nunca vê o vídeo.
+// Quem toca o arquivo é o OBS: o obs/levelbt-replay.lua ouve o evento de
+// replay salvo e carrega o vídeo na Fonte de Mídia. Essa parte a página
+// não tem como fazer — ela nunca vê o vídeo.
+//
+// E o que o vídeo mostra não é escolha nossa: o Replay Buffer grava a
+// SAÍDA DO PROGRAMA, o que foi ao ar. Então ele já traz a câmera, ou a
+// mídia, ou o que estivesse na cena ao vivo, com o placar queimado na
+// imagem. Para gravar uma fonte isolada seria preciso outro mecanismo.
 const COBERTO_MS=1200;   // instante, dentro da cortina, em que a tela está tapada
 const PRE_SALVA_MS=700;  // folga entre mandar salvar e começar a cortina
 let emReplay=false, replayTimers=[];
@@ -1534,10 +1539,40 @@ function obsSequenciaReplay(cfg){
 
 // Cada comando carrega um id. O overlay roda uma vez por id, então
 // reler o mesmo placar dez vezes não dispara dez replays.
+//
+// POR QUE O id NÃO PODE VIVER SÓ NA MEMÓRIA
+//   O `ultimoObsCmd` acima é de uma página. E dentro do OBS existe mais de
+//   uma página do overlay: ele está na cena ao vivo e na cena do replay, e
+//   a fonte pode recarregar ao trocar de cena. Cada instância começa com a
+//   memória limpa, lê o mesmo comando — ainda dentro da janela de validade
+//   — e dispara a coreografia outra vez. Era isso que fazia o replay rodar
+//   três vezes seguidas: um disparo por instância.
+//
+//   Todas as fontes de navegador do OBS dividem o mesmo perfil, logo o
+//   mesmo localStorage. Anotar o id ali faz o comando ser consumido uma
+//   única vez na máquina, sobrevivendo a recarga e a troca de cena.
+//
+//   Só quem está dentro do OBS anota. O preview do painel roda este mesmo
+//   arquivo e não deve gastar o comando do OBS de ninguém.
+const CHAVE_CMD = 'lbt.obscmd';
+
+function cmdJaUsado(id){
+  if(id===ultimoObsCmd) return true;
+  if(!OBS) return false;
+  try{ return localStorage.getItem(CHAVE_CMD)===String(id); }
+  catch(e){ return false; }   // modo privado, cota cheia: cai no guarda de memória
+}
+
+function marcarCmdUsado(id){
+  ultimoObsCmd = id;
+  if(!OBS) return;
+  try{ localStorage.setItem(CHAVE_CMD, String(id)); }catch(e){}
+}
+
 function obsAtenderComando(m){
   const cmd = m && m.obsCmd;
-  if(!cmd || !cmd.id || cmd.id===ultimoObsCmd) return;
-  ultimoObsCmd = cmd.id;
+  if(!cmd || !cmd.id || cmdJaUsado(cmd.id)) return;
+  marcarCmdUsado(cmd.id);
   // comando velho (overlay entrou no ar depois) não executa
   if(cmd.em && Date.now()-cmd.em > 20000) return;
   obsExecutar(cmd);
