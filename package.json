@@ -1,0 +1,12 @@
+{
+  "name": "levelbt-live",
+  "private": true,
+  "description": "Placar de transmissao de beach tennis. O produto e o index.html; isto aqui so existe para os testes.",
+  "scripts": {
+    "test": "node testes/placar.js",
+    "pecas": "node obs/gerar.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.2"
+  }
+}

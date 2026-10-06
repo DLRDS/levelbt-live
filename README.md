@@ -8,11 +8,17 @@ endereço, outro banco. Os dois não conversam.
 
 ```
 index.html     o produto inteiro — controle e overlay no mesmo arquivo
-banco.sql      transmissões e painel, para rodar uma vez no SQL Editor
+banco.sql      transmissões e painel        ← rode 1º
+banco-obs.sql  o canal de volta do overlay  ← rode 2º
+banco-v2.sql   a ordem das gravações        ← rode 3º
 LOGOS.md       as logos, que se configuram pelo painel e não por SQL
 GUIA-OBS.md    como ligar no OBS
+COMANDO-OBS.md comandar o OBS pelo celular (replay, cenas)
 testes/        node testes/placar.js
 ```
+
+Os três arquivos de banco rodam **nessa ordem**, uma vez cada, no SQL
+Editor do Supabase. Todos são seguros para rodar de novo.
 
 ## Como o arquivo funciona
 
@@ -40,6 +46,11 @@ devolver.
 > O SQL Editor roda o arquivo como **uma transação só**. Se qualquer
 > comando falhar, tudo é desfeito — inclusive o que já tinha passado.
 > Um erro de "relation não existe" logo depois costuma ser isso.
+
+**2a.** Rode o `banco-obs.sql` e depois o `banco-v2.sql`, nessa ordem.
+O primeiro abre o canal de volta do overlay (sem ele, o painel não enxerga
+o OBS). O segundo faz o banco recusar placar que chegue fora de ordem —
+sem ele tudo funciona, só sem essa proteção.
 
 **2b.** Siga o `LOGOS.md` para habilitar o envio de logos. São dois
 cliques no painel; não dá para fazer por SQL.
@@ -111,3 +122,30 @@ e por aqui é o quarentão.
 Fixo em 60%, que é a proporção que deixa a quadra respirar sem perder a
 leitura. Não há controle na tela de propósito: é decisão de produto, não
 de operação. Se um dia precisar mudar, é uma linha no CSS — `--esc`.
+
+### Quando a internet pisca
+
+O celular não desiste. Se um envio falha, ele tenta de novo sozinho —
+1s, 2s, 4s, 8s e daí de 10 em 10 segundos, sem parar. Cada tentativa
+manda o placar **de agora**, não o que falhou: se a conexão voltar depois
+de três pontos, chega o placar correto de uma vez, não três mensagens
+atrasadas.
+
+A linha embaixo do painel conta o que está acontecendo:
+
+| o que aparece | o que significa |
+|---|---|
+| `Sincronizado · 14:32:07` | tudo certo |
+| `Sem conexão · tentando de novo (3ª vez)` | está fora, mas insistindo |
+| `Sincronizado de novo · 14:32:19` | voltou — some sozinho em 6s |
+| `Chave de controle não confere` | este aparelho não consegue marcar |
+
+### DESFAZER depois de recarregar
+
+A pilha do DESFAZER fica gravada no próprio aparelho, separada por
+transmissão. Celular bloqueado, aba descarregada ou um F5 sem querer: ao
+retomar a partida, o DESFAZER volta habilitado com as últimas 200
+mudanças. Duas quadras abertas no mesmo celular não se misturam.
+
+Trocar de jogo pela fila limpa a pilha de propósito — voltar para o placar
+do jogo anterior não faria sentido.
