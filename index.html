@@ -17,6 +17,12 @@
     --fd:'Archivo Black',sans-serif; --fb:'Archivo',sans-serif; --fm:'JetBrains Mono',monospace;
   }
   body{font-family:var(--fb);background:var(--ink);color:var(--white);font-size:16px;-webkit-font-smoothing:antialiased;}
+
+  /* Aviso de sincronia. Fora do ar é vermelho e fica; o "voltou" é verde
+     e some em 6s — ele existe para o operador poder parar de se
+     preocupar, não para ficar na tela o jogo inteiro. */
+  #syncMsg.sync-fora{color:var(--danger);font-weight:600;}
+  #syncMsg.sync-voltou{color:#39D98A;font-weight:600;}
   button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   input,select{font:inherit;color:inherit;}
 
@@ -955,7 +961,7 @@ function precisaSets(m){ return m.nSets===1 ? 1 : 2; }
 // ── Regras ───────────────────────────────────────────────────
 function pontoPara(m,time){
   if(m.status!=='playing') return;
-  hist.push(JSON.stringify(m));
+  empilhar(m);
   m.evento=null;
 
   if(m.inTb){
@@ -1125,6 +1131,61 @@ function lerPatrocinios(){
 }
 function gravarPatrocinios(a){
   try{ localStorage.setItem(PATRO_LS,JSON.stringify(a.slice(0,8))); }catch(e){}
+}
+
+// ── Desfazer que sobrevive ao recarregar ──────────────────────────
+//
+// Cada mudança guarda uma cópia do placar anterior, e o DESFAZER volta
+// uma por vez. Antes essa pilha vivia só na memória da página: celular
+// bloqueado, aba descarregada ou um F5 sem querer e ela sumia, deixando
+// só os botõezinhos de ajuste manual para corrigir.
+//
+// Agora ela fica gravada no próprio aparelho, chaveada PELO TOKEN da
+// transmissão. Duas quadras abertas no mesmo celular não se misturam —
+// o DESFAZER de uma nunca mexe no placar da outra.
+//
+// 200 estados é mais do que um jogo inteiro usa, e pouco o bastante para
+// não pesar na memória do navegador.
+const HIST_LS='lbt_hist_';
+const HIST_MAX=200;
+
+function chaveHist(){ return tokenPub ? HIST_LS+tokenPub : null; }
+
+function gravarHist(){
+  const k=chaveHist(); if(!k) return;
+  try{ localStorage.setItem(k, JSON.stringify(hist)); }
+  catch(e){
+    // Cota do navegador cheia. Joga fora a metade mais antiga e tenta de
+    // novo: perder desfazer de dez minutos atrás é melhor do que perder
+    // o do ponto que acabou de acontecer.
+    try{ hist=hist.slice(-Math.floor(HIST_MAX/2));
+         localStorage.setItem(k, JSON.stringify(hist)); }catch(e2){}
+  }
+}
+
+// Única porta de entrada da pilha. Antes cada lugar fazia hist.push na
+// mão, e por isso nenhum deles gravava.
+function empilhar(m){
+  hist.push(JSON.stringify(m));
+  if(hist.length>HIST_MAX) hist=hist.slice(-HIST_MAX);
+  gravarHist();
+}
+
+function restaurarHist(){
+  const k=chaveHist(); if(!k){ hist=[]; return; }
+  try{
+    const a=JSON.parse(localStorage.getItem(k)||'[]');
+    hist = Array.isArray(a) ? a.filter(x=>typeof x==='string').slice(-HIST_MAX) : [];
+  }catch(e){ hist=[]; }
+}
+
+// Jogo novo começa sem desfazer: voltar para o placar do jogo anterior
+// não faria sentido nenhum.
+function esquecerHist(tok){
+  const k = tok ? HIST_LS+tok : chaveHist();
+  hist=[];
+  if(!k) return;
+  try{ localStorage.removeItem(k); }catch(e){}
 }
 
 // ── Patrocinadores ────────────────────────────────────────────────
@@ -1367,15 +1428,107 @@ async function lerDeVolta(){
   }catch(e){}
 }
 
-async function publicar(){
+// ── Publicar o placar ─────────────────────────────────────────────
+//
+// DOIS PROBLEMAS QUE ISTO RESOLVE
+//
+// 1 · A internet pisca e ninguém tenta de novo.
+//     Antes aparecia "Tentando de novo…" e nada tentava. O placar do OBS
+//     congelava calado enquanto o operador seguia marcando. Agora insiste
+//     sozinho, com espera crescente, até voltar.
+//
+// 2 · Os toques chegavam fora de ordem.
+//     Cada toque disparava um envio sem esperar o anterior, e a internet
+//     não garante ordem de chegada: o placar podia andar para trás por um
+//     instante. Agora vai um de cada vez.
+//
+// POR QUE DESCARTAR OS ESTADOS DO MEIO
+//   O que viaja não é "o que mudou", é o placar INTEIRO. Se três toques
+//   acontecem enquanto um envio está em curso, os dois primeiros já estão
+//   contidos no terceiro. Mandar os três seria mandar a mesma informação
+//   três vezes, com a chance de chegarem embaralhados. Então a fila guarda
+//   só uma coisa: "tem novidade". Na hora de enviar, lê o M de agora.
+//
+// POR QUE A ESPERA CRESCE
+//   Se a internet caiu, martelar de meio em meio segundo não a traz de
+//   volta — só gasta bateria e lota a fila do navegador. 1s, 2s, 4s, 8s e
+//   daí 10s em 10s, para sempre: desistir seria pior, porque o operador
+//   não tem como saber que precisa reenviar à mão.
+const ESPERAS=[1000,2000,4000,8000,10000];
+let enviando=false, temNovidade=false, falhasSeguidas=0;
+let reenvioTimer=null, estavaFora=false;
+
+function publicar(){
   if(!supa||!ctrlKey||!M) return;
   try{ localStorage.setItem('lbt_bc',JSON.stringify({token:tokenPub,key:ctrlKey})); }catch(e){}
+  temNovidade=true;
+  // Já existe um reenvio marcado? Ele vai pegar o estado novo sozinho.
+  // Enviar agora furaria a espera crescente logo quando ela é necessária.
+  if(reenvioTimer) return;
+  enviarPlacar();
+}
+
+async function enviarPlacar(){
+  if(enviando || !temNovidade || !supa || !ctrlKey || !M) return;
+  if(reenvioTimer){ clearTimeout(reenvioTimer); reenvioTimer=null; }
+  temNovidade=false; enviando=true;
+
+  const limpo=Object.assign({},M); delete limpo._obs;
+  let erro=null, resposta=null;
   try{
-    const limpo=Object.assign({},M); delete limpo._obs;
-    await supa.rpc('bc_write',{p_control_key:ctrlKey,p_payload:limpo});
-    const el=$('syncMsg'); if(el) el.textContent='Sincronizado · '+new Date().toLocaleTimeString('pt-BR');
-  }catch(e){
-    const el=$('syncMsg'); if(el) el.textContent='Falha ao sincronizar. Tentando de novo…';
+    const r=await supa.rpc('bc_write',{p_control_key:ctrlKey,p_payload:limpo});
+    if(r && r.error) erro=r.error; else resposta=r?r.data:null;
+  }catch(e){ erro=e; }
+  enviando=false;
+
+  if(erro){
+    falhasSeguidas++;
+    estavaFora=true;
+    temNovidade=true;             // este placar ainda não está gravado
+    pintarSync(null);
+    const espera=ESPERAS[Math.min(falhasSeguidas-1, ESPERAS.length-1)];
+    reenvioTimer=setTimeout(()=>{ reenvioTimer=null; enviarPlacar(); }, espera);
+    return;
+  }
+
+  falhasSeguidas=0;
+  pintarSync(resposta);
+  if(temNovidade) enviarPlacar();   // chegou novidade durante o envio
+}
+
+// Traduz a resposta do banco para uma frase que o operador entenda.
+//
+// O banco antigo devolve true/false; o banco-v2.sql devolve um objeto com
+// {ok, motivo}. As duas formas são aceitas de propósito: se você esquecer
+// de rodar o SQL novo, tudo continua funcionando, só sem a guarda de ordem.
+function pintarSync(resposta){
+  const el=$('syncMsg'); if(!el) return;
+  el.classList.remove('sync-fora','sync-voltou');
+
+  if(falhasSeguidas>0){
+    el.textContent='Sem conexão · tentando de novo ('+falhasSeguidas+'ª vez)';
+    el.classList.add('sync-fora');
+    return;
+  }
+
+  // Chave de controle errada é o único "não gravei" que o operador precisa
+  // ver: nada do que ele marcar vai entrar, e insistir não resolve.
+  if(resposta && typeof resposta==='object' && resposta.ok===false && resposta.motivo==='chave'){
+    el.textContent='Chave de controle não confere · este aparelho não consegue marcar';
+    el.classList.add('sync-fora');
+    return;
+  }
+
+  // motivo "antigo" cai aqui junto com "gravado", e é de propósito: quer
+  // dizer que o banco já tem algo mais novo. Nada se perdeu, nada a avisar.
+  const hora=new Date().toLocaleTimeString('pt-BR');
+  if(estavaFora){
+    estavaFora=false;
+    el.textContent='Sincronizado de novo · '+hora;
+    el.classList.add('sync-voltou');
+    setTimeout(()=>{ const e2=$('syncMsg'); if(e2) e2.classList.remove('sync-voltou'); }, 6000);
+  } else {
+    el.textContent='Sincronizado · '+hora;
   }
 }
 
@@ -1954,7 +2107,7 @@ function jogarDaFila(i){
   if(M.status==='playing' && (M.g1||M.g2||M.p1||M.p2||M.s1||M.s2)
      && !confirm('Trocar de jogo agora? O placar atual não foi encerrado e será perdido.')) return;
   trocarJogo(M,j);
-  hist=[];
+  esquecerHist();
   pintarControle(); publicar();
 }
 
@@ -2144,7 +2297,7 @@ function pintarControle(){
   $('srvgrid').innerHTML=todos.map((n,i)=>
     `<button class="srvb ${m.saque===i?'on':''}" data-s="${i}">${esc(n)}</button>`).join('');
   $('srvgrid').querySelectorAll('.srvb').forEach(b=>b.onclick=()=>{
-    hist.push(JSON.stringify(M)); M.saque=Number(b.dataset.s); M.v++; pintarControle(); publicar(); });
+    empilhar(M); M.saque=Number(b.dataset.s); M.v++; pintarControle(); publicar(); });
 
   // ajustes
   $('ajN1').textContent=nome(m.t1); $('ajN2').textContent=nome(m.t2);
@@ -2160,7 +2313,7 @@ function esc(s){ return String(s??'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&g
 
 // ajuste manual: mexe direto no placar, sem passar pelas regras
 function ajustar(cod){
-  hist.push(JSON.stringify(M));
+  empilhar(M);
   const alvo=cod.slice(0,2), sinal=cod.slice(2)==='+'?1:-1;
   const lim=(v,max)=>Math.max(0,Math.min(max,v));
   if(M.inTb){
@@ -2228,6 +2381,7 @@ async function tentarRetomar(){
     const {data}=await supa.rpc('bc_read',{p_token:s.token});
     if(!data||!data.t1) return false;
     definirPartida(data); ctrlKey=s.key; tokenPub=s.token;
+    restaurarHist();           // o DESFAZER volta junto com a partida
     $('ovUrl').value=location.origin+location.pathname+'?overlay='+tokenPub;
     $('setup').classList.add('hidden');
     $('live').classList.remove('hidden');
@@ -2243,7 +2397,14 @@ function ligarControle(){
   $('btnDemo').onclick=()=>window.open(location.origin+location.pathname+'?overlay=demo','_blank');
   $('tap1').onclick=()=>{pontoPara(M,1);pintarControle();publicar();};
   $('tap2').onclick=()=>{pontoPara(M,2);pintarControle();publicar();};
-  $('btnUndo').onclick=()=>{ if(!hist.length)return; M=JSON.parse(hist.pop()); M.v++; pintarControle(); publicar(); };
+  $('btnUndo').onclick=()=>{
+    if(!hist.length) return;
+    const vAgora=M.v;              // o número de ordem já gasto
+    M=JSON.parse(hist.pop());
+    M.v=vAgora+1;                  // desfazer é uma mudança NOVA, não um retorno
+    gravarHist();
+    pintarControle(); publicar();
+  };
   $('btnLink').onclick=()=>{ $('linkbox').classList.toggle('hidden'); atualizarVoltar(); };
   document.querySelectorAll('.cenab[data-c]').forEach(b=>b.onclick=()=>setCena(b.dataset.c));
   $('btnReplay').onclick=()=>{
@@ -2323,7 +2484,8 @@ function ligarControle(){
   $('btnNova').onclick=()=>{
     if(!confirm('Começar uma transmissão nova? A atual para de ser atualizada.')) return;
     try{ localStorage.removeItem('lbt_bc'); }catch(e){}
-    M=null; ctrlKey=null; tokenPub=null; hist=[];
+    esquecerHist();            // antes de perder o token, que é a chave dela
+    M=null; ctrlKey=null; tokenPub=null;
     $('live').classList.add('hidden'); $('linkbox').classList.add('hidden');
     $('setup').classList.remove('hidden');
     ['a1','a2','b1','b2','cat','fase','quadra','patroc'].forEach(id=>{ const e=$(id); if(e) e.value=''; });
@@ -2331,7 +2493,7 @@ function ligarControle(){
     $('setupMsg').style.display='none';
     window.scrollTo(0,0);
   };
-  $('btnEnd').onclick=()=>{ if(!confirm('Encerrar a partida?'))return; hist.push(JSON.stringify(M));
+  $('btnEnd').onclick=()=>{ if(!confirm('Encerrar a partida?'))return; empilhar(M);
     M.status='finished'; M.vencedor=(M.s1>M.s2)?1:(M.s2>M.s1?2:(M.g1>=M.g2?1:2));
     M.evento={t:'FIM',time:M.vencedor}; M.v++; pintarControle(); publicar(); };
   $('btnCopy').onclick=async()=>{ try{ await navigator.clipboard.writeText($('ovUrl').value);
