@@ -1055,6 +1055,215 @@ t('o banco.sql original ficou intocado',
   ()=>sqlV1.includes('returns boolean') && !sqlV1.includes('v_velho'));
 
 
+
+// ══════════════════════════════════════════════════════════════════
+// TEMPO REAL · A CAMPAINHA
+//
+// A campainha é um aviso VAZIO. O que vai ao ar vem sempre do bc_read.
+// Os testes aqui existem sobretudo para garantir que ninguém, um dia,
+// "otimize" isso mandando o placar junto — seria abrir a porta para
+// placar falso no meio da final.
+// ══════════════════════════════════════════════════════════════════
+console.log('\n── TEMPO REAL ──');
+
+// Realtime de mentira: guarda o que foi assinado e o que foi enviado.
+function realtimeFalso(){
+  const r={canais:[], enviados:[], estado:'SUBSCRIBED'};
+  r.channel=(nome)=>{
+    const c={nome, ouvintes:{}, enviados:[]};
+    c.on=(tipo,filtro,fn)=>{ c.ouvintes[filtro.event]=fn; return c; };
+    c.subscribe=(cb)=>{ setTimeout(()=>cb&&cb(r.estado),0); return c; };
+    c.send=async(msg)=>{ c.enviados.push(msg); r.enviados.push(msg); return 'ok'; };
+    r.canais.push(c);
+    return c;
+  };
+  return r;
+}
+
+function abrirOverlay(banco, rt){
+  return new JSDOM(html,{runScripts:'dangerously',url:'https://x/index.html?overlay=tk1',
+    pretendToBeVisual:true,beforeParse(w){
+      w.innerWidth=1920; w.innerHeight=1080; w.scrollTo=()=>{};
+      w.matchMedia=()=>({matches:true,addListener(){},removeListener(){}});
+      w.supabase={createClient:()=>{
+        const cli={rpc:banco.rpc,
+          storage:{from:()=>({upload:async()=>({error:null}),
+            getPublicUrl:()=>({data:{publicUrl:'https://x/l.png'}})})}};
+        if(rt){ cli.channel=rt.channel; cli.removeChannel=()=>{}; }
+        return cli;
+      }};
+    }}).window;
+}
+
+// ── O overlay escuta e confere o banco ────────────────────────────
+{
+  const banco=bancoFalso(); const rt=realtimeFalso();
+  banco.linhas['tk1']={ck:'ck1',payload:{t1:['Ana'],t2:['Cris'],v:1,status:'playing',
+                                         p1:0,p2:0,g1:0,g2:0,s1:0,s2:0,cena:'placar',
+                                         setsFeitos:[],agenda:[],patrocinios:[]}};
+  let lidas=0;
+  const rpcOrig=banco.rpc;
+  banco.rpc=async(fn,a)=>{ if(fn==='bc_read') lidas++; return rpcOrig(fn,a); };
+
+  const w=abrirOverlay(banco, rt);
+  await new Promise(r=>setTimeout(r,800));
+
+  t('o overlay entra no canal da sua transmissão',
+    ()=>rt.canais.length===1 && rt.canais[0].nome==='bc:tk1');
+  t('e escuta o aviso de mudança',
+    ()=>typeof rt.canais[0].ouvintes['mudou']==='function');
+
+  const antes=lidas;
+  await new Promise(r=>setTimeout(r,350));   // passa o teto entre leituras
+  rt.canais[0].ouvintes['mudou']({payload:{}});
+  await new Promise(r=>setTimeout(r,80));
+  t('campainha toca → o overlay vai conferir o banco na hora',
+    ()=>lidas===antes+1);
+
+  // ── a parte que importa: placar falso na campainha é ignorado ──
+  banco.linhas['tk1'].payload.p1=2;
+  banco.linhas['tk1'].payload.v=2;
+  await new Promise(r=>setTimeout(r,350));
+  rt.canais[0].ouvintes['mudou']({payload:{t1:['HACKER'],p1:99,v:9999}});
+  await new Promise(r=>setTimeout(r,120));
+  const texto=w.document.getElementById('stage').textContent;
+  t('placar inventado na campainha não entra na tela',
+    ()=>!texto.includes('HACKER') && !texto.includes('99'));
+  t('o que aparece é o que o banco diz, lido pela porta de sempre',
+    ()=>texto.includes('ANA') || texto.includes('Ana'));
+
+  // ── enxurrada de campainhas vira uma leitura só ──
+  await new Promise(r=>setTimeout(r,350));
+  const antes2=lidas;
+  for(let i=0;i<12;i++) rt.canais[0].ouvintes['mudou']({payload:{}});
+  await new Promise(r=>setTimeout(r,120));
+  t('doze campainhas seguidas não viram doze leituras',
+    ()=>lidas-antes2<=2);
+}
+
+// ── Sem Realtime, nada quebra ─────────────────────────────────────
+{
+  const banco=bancoFalso();
+  banco.linhas['tk1']={ck:'ck1',payload:{t1:['Ana'],t2:['Cris'],v:1,status:'playing',
+                                         p1:0,p2:0,g1:0,g2:0,s1:0,s2:0,cena:'placar',
+                                         setsFeitos:[],agenda:[],patrocinios:[]}};
+  const w=abrirOverlay(banco, null);        // cliente sem .channel
+  await new Promise(r=>setTimeout(r,800));
+  t('biblioteca sem Realtime: o overlay desenha assim mesmo',
+    ()=>/ANA|Ana/.test(w.document.getElementById('stage').textContent));
+}
+
+// ── O controle toca DEPOIS de gravar ──────────────────────────────
+{
+  const banco=bancoFalso(); const rt=realtimeFalso();
+  const w=new JSDOM(html,{runScripts:'dangerously',url:'https://x/index.html',
+    pretendToBeVisual:true,beforeParse(w2){
+      w2.innerWidth=1440; w2.innerHeight=900; w2.scrollTo=()=>{}; w2.confirm=()=>true;
+      w2.matchMedia=()=>({matches:true,addListener(){},removeListener(){}});
+      w2.supabase={createClient:()=>({rpc:banco.rpc, channel:rt.channel, removeChannel:()=>{},
+        storage:{from:()=>({upload:async()=>({error:null}),
+          getPublicUrl:()=>({data:{publicUrl:'https://x/l.png'}})})}})};
+    }}).window;
+  await new Promise(r=>setTimeout(r,700));
+  w.document.getElementById('a1').value='Ana';
+  w.document.getElementById('b1').value='Cris';
+  await w.iniciar();
+  await new Promise(r=>setTimeout(r,80));
+
+  t('o controle também entra no canal da transmissão',
+    ()=>rt.canais.some(c=>c.nome==='bc:tk1'));
+  t('e o painel diz que está em tempo real',
+    ()=>/TEMPO REAL/.test(w.document.getElementById('trMsg').textContent));
+
+  const antes=rt.enviados.length;
+  w.setCena('agenda');
+  await new Promise(r=>setTimeout(r,80));
+  t('cada mudança gravada toca a campainha',
+    ()=>rt.enviados.length===antes+1);
+  t('e a campainha vai VAZIA — sem placar dentro',
+    ()=>Object.keys(rt.enviados[rt.enviados.length-1].payload||{}).length===0);
+
+  // a gravação falha: não adianta tocar campainha para um placar que não entrou
+  const antes2=rt.enviados.length;
+  let caiu=0;
+  banco.atrasarWrite=()=>{ caiu++; throw new Error('sem internet'); };
+  w.setCena('placar');
+  await new Promise(r=>setTimeout(r,80));
+  t('gravação que falhou não toca campainha',
+    ()=>caiu>0 && rt.enviados.length===antes2);
+}
+
+// ── Canal que não sobe cai para a reserva, e avisa ────────────────
+{
+  const banco=bancoFalso(); const rt=realtimeFalso(); rt.estado='CHANNEL_ERROR';
+  const w=new JSDOM(html,{runScripts:'dangerously',url:'https://x/index.html',
+    pretendToBeVisual:true,beforeParse(w2){
+      w2.innerWidth=1440; w2.innerHeight=900; w2.scrollTo=()=>{}; w2.confirm=()=>true;
+      w2.matchMedia=()=>({matches:true,addListener(){},removeListener(){}});
+      w2.supabase={createClient:()=>({rpc:banco.rpc, channel:rt.channel, removeChannel:()=>{},
+        storage:{from:()=>({upload:async()=>({error:null}),
+          getPublicUrl:()=>({data:{publicUrl:'https://x/l.png'}})})}})};
+    }}).window;
+  await new Promise(r=>setTimeout(r,700));
+  w.document.getElementById('a1').value='Ana';
+  w.document.getElementById('b1').value='Cris';
+  await w.iniciar();
+  await new Promise(r=>setTimeout(r,80));
+  t('canal que não sobe: o painel avisa que está na reserva',
+    ()=>/RESERVA/.test(w.document.getElementById('trMsg').textContent));
+  t('e o placar continua sendo gravado normalmente',
+    ()=>banco.linhas['tk1'].payload.t1[0]==='Ana');
+}
+
+// ── O vigia levanta a campainha caída ─────────────────────────────
+{
+  const banco=bancoFalso(); const rt=realtimeFalso(); rt.estado='CHANNEL_ERROR';
+  const w=new JSDOM(html,{runScripts:'dangerously',url:'https://x/index.html',
+    pretendToBeVisual:true,beforeParse(w2){
+      w2.innerWidth=1440; w2.innerHeight=900; w2.scrollTo=()=>{}; w2.confirm=()=>true;
+      w2.matchMedia=()=>({matches:true,addListener(){},removeListener(){}});
+      w2.supabase={createClient:()=>({rpc:banco.rpc, channel:rt.channel, removeChannel:()=>{},
+        storage:{from:()=>({upload:async()=>({error:null}),
+          getPublicUrl:()=>({data:{publicUrl:'https://x/l.png'}})})}})};
+    }}).window;
+  await new Promise(r=>setTimeout(r,700));
+  w.document.getElementById('a1').value='Ana';
+  w.document.getElementById('b1').value='Cris';
+  await w.iniciar();
+  await new Promise(r=>setTimeout(r,80));
+
+  const canaisAntes=rt.canais.length;
+  rt.estado='SUBSCRIBED';              // a internet voltou
+  w.religarCampainha();
+  await new Promise(r=>setTimeout(r,60));
+  t('o vigia levanta outra campainha quando a anterior morreu',
+    ()=>rt.canais.length===canaisAntes+1);
+  t('e o painel volta a dizer tempo real',
+    ()=>/TEMPO REAL/.test(w.document.getElementById('trMsg').textContent));
+
+  const quantos=rt.canais.length;
+  w.religarCampainha();                 // com a campainha viva, não mexe
+  await new Promise(r=>setTimeout(r,40));
+  t('com a campainha viva, o vigia não fica trocando de canal à toa',
+    ()=>rt.canais.length===quantos);
+}
+
+// ── O desenho, lido no código ─────────────────────────────────────
+t('a reserva ficou em 5s, e não mais em 900ms',
+  ()=>/const RESERVA_MS=5000/.test(html) && !/setTimeout\(loopOverlay,900\)/.test(html));
+t('existe teto entre leituras, para campainha repetida não virar enxurrada',
+  ()=>/const MIN_ENTRE_LEITURAS=300/.test(html));
+t('a campainha não leva placar: o envio é sempre payload vazio',
+  ()=>/event:'mudou',payload:\{\}/.test(html));
+t('e o overlay nunca lê o payload da campainha',
+  ()=>/\.on\('broadcast',\{event:'mudou'\},\(\)=>aoTocar\(\)\)/.test(html));
+t('nenhuma policy foi aberta na tabela do placar',
+  ()=>!/create policy[\s\S]{0,200}broadcasts/i.test(
+        fs.readFileSync(path.join(__dirname,'..','banco.sql'),'utf8')
+       +fs.readFileSync(path.join(__dirname,'..','banco-obs.sql'),'utf8')
+       +fs.readFileSync(path.join(__dirname,'..','banco-v2.sql'),'utf8')));
+
+
 console.log('\n'+(bad? '✗ '+bad+' FALHA(S) · '+ok+' ok' : '✓ TUDO OK · '+ok+' testes'));
   process.exit(bad?1:0);
 },700);

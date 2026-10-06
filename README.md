@@ -149,3 +149,40 @@ mudanças. Duas quadras abertas no mesmo celular não se misturam.
 
 Trocar de jogo pela fila limpa a pilha de propósito — voltar para o placar
 do jogo anterior não faria sentido.
+
+### Como o placar chega ao OBS
+
+O controle grava no banco e **toca uma campainha** pelo Realtime do
+Supabase. O overlay ouve, vai buscar o placar no banco e desenha.
+
+```
+celular marca  →  grava no banco  →  toca a campainha
+                                          ↓
+                      overlay ouve  →  lê o banco  →  tela
+```
+
+A campainha **não carrega o placar** — carrega só o aviso. O canal é
+aberto, e quem souber o token (ele está na URL do OBS) poderia tocar uma
+campainha falsa. Com ela vazia, o pior que isso causa é o overlay conferir
+o banco à toa; o que vai ao ar vem sempre do `bc_read`, que continua
+trancado. Há um teto de uma leitura a cada 0,3 s para nem isso incomodar.
+
+Por isso **nenhuma tabela foi destrancada** nesta parte. O caminho óbvio
+seria o *Postgres Changes*, que exigiria `grant select on broadcasts to
+anon` — e a tabela guarda a chave de controle de todas as transmissões.
+
+Se a campainha cair, o overlay continua perguntando ao banco a cada 5
+segundos, como antes fazia a cada 0,9. O painel mostra qual dos dois está
+valendo:
+
+| no painel | o que significa |
+|---|---|
+| `TEMPO REAL · O PLACAR APARECE NA HORA` | campainha funcionando |
+| `RESERVA · O PLACAR APARECE EM ATÉ 5 SEGUNDOS` | caiu, mas nada parou |
+
+De 20 em 20 segundos um vigia tenta levantar a campainha caída.
+
+Medido no projeto de verdade, pelo navegador: a campainha chega em **20 a
+90 ms**, a leitura do banco leva **~130 ms**. O ponto aparece na tela em
+cerca de 0,2 s, contra até 0,9 s antes — e as perguntas ao banco caem de
+~4.000 para ~720 por hora de transmissão.
