@@ -800,7 +800,7 @@ t('solta, cada peça sai no tamanho de desenho',
   ()=>/\.stage\{--esc:1;\}/.test(pecasHtml));
 
 // as sete peças desenham
-const pecas=['replay','cartela','selo','quebrou','patrocinio','proximos','fim'];
+const pecas=['replay','cartela','selo','quebrou','patrocinio','proximos','fim','stats'];
 for(const nome of pecas){
   const w2=new JSDOM(pecasHtml,{runScripts:'dangerously',pretendToBeVisual:true,
     url:'https://x/obs/pecas.html?peca='+nome+
@@ -1263,6 +1263,201 @@ t('nenhuma policy foi aberta na tabela do placar',
        +fs.readFileSync(path.join(__dirname,'..','banco-obs.sql'),'utf8')
        +fs.readFileSync(path.join(__dirname,'..','banco-v2.sql'),'utf8')));
 
+
+
+// ══════════════════════════════════════════════════════════════════
+// ESTATÍSTICAS · REGISTRO PONTO A PONTO
+//
+// Partidas jogadas aqui com resultado conhecido de antemão: cada número
+// conferido foi calculado na mão antes de escrever o teste.
+// ══════════════════════════════════════════════════════════════════
+console.log('\n── ESTATÍSTICAS ──');
+{
+  const W=w;   // a janela demo do começo: tem todas as funções, sem banco
+  const P=W.novaPartida({t1:['Ana','Bia'],t2:['Cris','Dani'],alvo:6,tbPts:7,nSets:2});
+  P.saque=0;                                   // Ana saca: dupla 1 no saque
+
+  t('partida nova nasce com o registro vazio', ()=>Array.isArray(P.pontos) && P.pontos.length===0);
+  t('o placar curto começa em S1 0-0 0-0', ()=>W.placarCurto(P)==='S1 0-0 0-0');
+
+  // O game, roteirizado: dupla 2 abre 0-40, a 1 salva três break points
+  // até o quarentão, e a 2 converte no quarentão.
+  //   0-0  0-15  0-30 │ 0-40 bp  15-40 bp  30-40 bp │ 40-40 bp+q
+  [2,2,2, 1,1,1, 2].forEach(q=>W.pontoPara(P,q));
+
+  t('cada ponto virou uma linha', ()=>P.pontos.length===7);
+  t('a linha guarda o placar de ANTES do ponto',
+    ()=>P.pontos[0].pl==='S1 0-0 0-0' && P.pontos[3].pl==='S1 0-0 0-40'
+      && P.pontos[6].pl==='S1 0-0 40-40');
+  t('e quem sacava — o jogador, não só a dupla', ()=>P.pontos.every(x=>x.s===0));
+  t('0-15 e 0-30 não são break point', ()=>!P.pontos[1].bp && !P.pontos[2].bp);
+  t('0-40, 15-40 e 30-40 são break point', ()=>P.pontos[3].bp && P.pontos[4].bp && P.pontos[5].bp);
+  t('o quarentão é break point E quarentão', ()=>P.pontos[6].bp===1 && P.pontos[6].q===1);
+  t('campo falso nem é gravado, para a linha ficar enxuta',
+    ()=>!('bp' in P.pontos[0]) && !('q' in P.pontos[0]));
+  t('e o game virou quebra de saque', ()=>P.g2===1 && P.evento && P.evento.t==='QUEBROU');
+
+  const e=W.estatisticas(P);
+  t('saque da dupla 1: venceu 3 de 7', ()=>e[1].saqueV===3 && e[1].saqueJ===7);
+  t('devolução da dupla 2: venceu 4 de 7', ()=>e[2].devolV===4 && e[2].devolJ===7);
+  t('dupla 2 ainda não sacou: zero jogados', ()=>e[2].saqueJ===0);
+  t('break points da dupla 2: converteu 1 de 4', ()=>e[2].bpV===1 && e[2].bpJ===4);
+  t('quem saca não tem break point', ()=>e[1].bpJ===0);
+  t('maior sequência: 3 para cada lado', ()=>e[1].seq===3 && e[2].seq===3);
+  t('quarentão: 1 para a dupla 2, 0 para a 1', ()=>e[2].q===1 && e[1].q===0);
+  t('total de pontos', ()=>e.total===7);
+
+  // segundo game: agora a dupla 2 saca (rodízio ITF: 0 → 2)
+  t('o saque passou para a outra dupla', ()=>P.saque===2);
+  [2,2,2,2].forEach(q=>W.pontoPara(P,q));       // game de zero da dupla 2
+  const e2=W.estatisticas(P);
+  t('game de zero no saque: 4/4', ()=>e2[2].saqueV===4 && e2[2].saqueJ===4);
+  t('e a sequência atravessa de um game para o outro: 5 seguidos',
+    ()=>e2[2].seq===5);
+  t('placar curto no segundo game', ()=>P.pontos[7].pl==='S1 0-1 0-0');
+
+  // ── as linhas prontas para a tela ──
+  const L=W.linhasEstat(e2);
+  t('cinco linhas, na ordem combinada', ()=>L.length===5 &&
+    L.map(l=>l.rot).join('|')==='PONTOS NO SAQUE|PONTOS NA DEVOLUÇÃO|BREAK POINTS|MAIOR SEQUÊNCIA|QUARENTÕES VENCIDOS');
+  t('saque mostrado como fração e porcentagem',
+    ()=>L[0].a==='3/7' && L[0].pa==='43%' && L[0].b==='4/4' && L[0].pb==='100%');
+  t('break points como "1/4"', ()=>L[2].b==='1/4' && L[2].a==='—');
+  t('quem lidera fica marcado', ()=>L[0].lid===2 && L[3].lid===2);
+
+  // ── tiebreak: conta no saque, mas não tem break point nem quarentão ──
+  const T=W.novaPartida({t1:['A'],t2:['B'],alvo:6,tbPts:7,nSets:2});
+  T.g1=6; T.g2=6; W.conferirTiebreak(T);
+  t('em 6-6 entra no tiebreak', ()=>T.inTb===true);
+  t('placar curto do tiebreak', ()=>W.placarCurto(T)==='S1 TB 0-0');
+  [1,2,1,2,1,2].forEach(q=>W.pontoPara(T,q));
+  t('no tiebreak nenhum ponto é break point', ()=>T.pontos.every(x=>!x.bp));
+  t('nem quarentão', ()=>T.pontos.every(x=>!x.q));
+  const et=W.estatisticas(T);
+  t('mas todos contam no saque e na devolução',
+    ()=>et[1].saqueJ+et[2].saqueJ===6 && et[1].devolJ+et[2].devolJ===6);
+  t('o sacador muda ao longo do tiebreak, e o registro acompanha',
+    ()=>new Set(T.pontos.map(x=>x.s)).size>=2);
+
+  const S=W.novaPartida({t1:['A'],t2:['B'],nSets:2});
+  S.s1=1; S.s2=1; S.setsFeitos=[{g1:6,g2:3},{g1:3,g2:6}]; S.superSet=true; S.inTb=true; S.tb1=7; S.tb2=6;
+  t('placar curto do match tiebreak', ()=>W.placarCurto(S)==='MTB 7-6');
+
+  // ── robustez ──
+  const V=W.novaPartida({t1:['A'],t2:['B']}); delete V.pontos;
+  t('partida antiga, sem registro: as contas dão zero sem quebrar',
+    ()=>W.estatisticas(V).total===0);
+  W.pontoPara(V,1);
+  t('e o primeiro ponto cria o registro', ()=>Array.isArray(V.pontos) && V.pontos.length===1);
+  const X={pontos:[null,{w:7},{w:'1'},{},{w:1,s:0}]};
+  t('linha estranha no registro é ignorada, não derruba a conta',
+    ()=>W.estatisticas(X).total===1);
+  t('sem nenhum ponto, traço — nunca "0%" inventado',
+    ()=>W.linhasEstat(W.estatisticas({pontos:[]}))[0].a==='—'
+      && W.linhasEstat(W.estatisticas({pontos:[]}))[0].pa==='');
+  t('sem dado dos dois lados, ninguém é pintado de líder',
+    ()=>W.linhasEstat(e)[0].lid===0);   // dupla 2 não tinha sacado ainda
+
+  // ── trocar de jogo zera ──
+  const J=W.novaPartida({t1:['A'],t2:['B']});
+  W.pontoPara(J,1); W.pontoPara(J,2);
+  W.trocarJogo(J,{a:'C',b:'D',ctx:''});
+  t('jogo novo pela fila começa sem o registro do anterior', ()=>J.pontos.length===0);
+}
+
+// ── Desfazer apaga o registro junto ───────────────────────────────
+{
+  const banco=bancoFalso();
+  const wp=await painelComJogo(banco);
+  wp.document.getElementById('tap1').click(); await new Promise(r=>setTimeout(r,30));
+  wp.document.getElementById('tap2').click(); await new Promise(r=>setTimeout(r,30));
+  wp.document.getElementById('tap2').click(); await new Promise(r=>setTimeout(r,60));
+  t('três toques, três linhas', ()=>wp.partidaAtual().pontos.length===3);
+  t('e o registro viaja para o banco junto com o placar',
+    ()=>banco.linhas['tk1'].payload.pontos.length===3);
+
+  wp.document.getElementById('btnUndo').click(); await new Promise(r=>setTimeout(r,60));
+  t('desfazer apaga a última linha', ()=>wp.partidaAtual().pontos.length===2);
+  t('e o banco fica com o registro certo', ()=>banco.linhas['tk1'].payload.pontos.length===2);
+
+  // o ajuste manual não inventa linha
+  wp.ajustar('p1+'); await new Promise(r=>setTimeout(r,40));
+  t('ajuste manual não cria registro', ()=>wp.partidaAtual().pontos.length===2);
+  t('e o painel avisa em quantos pontos a conta se baseia',
+    ()=>/BASEADO EM 2 PONTOS MARCADOS/.test(wp.document.getElementById('ctrlStats').textContent)
+      && /AJUSTES MANUAIS NÃO ENTRAM/.test(wp.document.getElementById('ctrlStats').textContent));
+  t('a gaveta mostra as cinco estatísticas',
+    ()=>wp.document.querySelectorAll('#ctrlStats .sl').length===5);
+
+  // ── a cartela no ar ──
+  t('a mesa de corte tem o botão ESTATÍSTICAS',
+    ()=>!!wp.document.querySelector('#cenas .cenab[data-c="stats"]'));
+  wp.document.querySelector('#cenas .cenab[data-c="stats"]').click();
+  await new Promise(r=>setTimeout(r,60));
+  t('apertar o botão põe a cena no ar e acende o botão',
+    ()=>banco.linhas['tk1'].payload.cena==='stats'
+      && wp.document.querySelector('#cenas .cenab[data-c="stats"]').classList.contains('on'));
+}
+
+// ── O overlay desenha a cartela ───────────────────────────────────
+{
+  const banco=bancoFalso();
+  const base=w.novaPartida({t1:['Ana','Bia'],t2:['Cris','Dani'],torneio:'Copa Verão',cat:'Mista A',fase:'Semi'});
+  base.saque=0;
+  [2,2,2,1,1,1,2].forEach(q=>w.pontoPara(base,q));
+  base.cena='stats'; base.v=50;
+  banco.linhas['tk1']={ck:'ck1',payload:JSON.parse(JSON.stringify(base))};
+  const wo=abrirOverlay(banco,null);
+  await new Promise(r=>setTimeout(r,800));
+  const d2=wo.document;
+  t('com a cena ESTATÍSTICAS, a cartela entra', ()=>d2.getElementById('ovSta').classList.contains('show'));
+  t('e o placar sai, como nas outras cartelas', ()=>d2.getElementById('bug').classList.contains('out'));
+  t('a cartela traz as duas duplas', ()=>d2.getElementById('staA').textContent==='Ana/Bia'
+    && d2.getElementById('staB').textContent==='Cris/Dani');
+  t('e o contexto do jogo', ()=>/COPA VERÃO · MISTA A · SEMI/.test(d2.getElementById('staCtx').textContent));
+  t('as cinco linhas', ()=>d2.querySelectorAll('#staLinhas .ln').length===5);
+  t('com os números da mesma conta do controle',
+    ()=>/3\/7/.test(d2.getElementById('staLinhas').textContent)
+      && /1\/4/.test(d2.getElementById('staLinhas').textContent));
+
+  // volta para o placar: a cartela sai
+  banco.linhas['tk1'].payload.cena='placar'; banco.linhas['tk1'].payload.v=51;
+  await new Promise(r=>setTimeout(r,5300));     // a reserva lê de 5 em 5s
+  t('voltando para PLACAR, a cartela sai e o placar volta',
+    ()=>!d2.getElementById('ovSta').classList.contains('show')
+      && !d2.getElementById('bug').classList.contains('out'));
+}
+t('nenhuma animação nova mexe em letter-spacing',
+  ()=>!/\.sta[^{]*\{[^}]*animation[^}]*letter/.test(html));
+
+
+
+// ── A peça avulsa de estatísticas ─────────────────────────────────
+{
+  const abrirPeca=(q)=>new JSDOM(pecasHtml,{runScripts:'dangerously',pretendToBeVisual:true,
+    url:'https://x/obs/pecas.html?'+q}).window;
+  const wp=abrirPeca('peca=stats&a=Ana/Bia&b=Cris/Dani&torneio=Copa&saque=24/32,18/29&devol=11/29,8/32&bp=2/5,1/3&seq=6,4&q=3,2');
+  await new Promise(r=>setTimeout(r,150));
+  const d3=wp.document, txt3=d3.getElementById('staLinhas').textContent;
+  t('peça stats: as duplas vêm do endereço',
+    ()=>d3.getElementById('staA').textContent==='Ana/Bia' && d3.getElementById('staB').textContent==='Cris/Dani');
+  t('peça stats: os números também', ()=>/24\/32/.test(txt3) && /2\/5/.test(txt3) && /6/.test(txt3));
+  t('peça stats: a porcentagem é calculada, não digitada', ()=>/75%/.test(txt3) && /62%/.test(txt3));
+  t('peça stats: quem lidera fica laranja, igual ao ao vivo',
+    ()=>d3.querySelectorAll('#staLinhas .v.a.lid').length===5);
+
+  // A regra do projeto: nunca inventar resultado. Sem endereço, traço.
+  const vz=abrirPeca('peca=stats');
+  await new Promise(r=>setTimeout(r,150));
+  const dv=vz.document;
+  t('peça stats sem dados mostra traço, nunca número de exemplo',
+    ()=>dv.getElementById('staA').textContent==='—'
+      && !/\d/.test(dv.getElementById('staLinhas').textContent));
+
+  const xs=abrirPeca('peca=stats&saque='+encodeURIComponent('<img src=x onerror=alert(1)>,1/2'));
+  await new Promise(r=>setTimeout(r,150));
+  t('peça stats: o endereço não vira HTML', ()=>!xs.document.querySelector('#staLinhas img'));
+}
 
 console.log('\n'+(bad? '✗ '+bad+' FALHA(S) · '+ok+' ok' : '✓ TUDO OK · '+ok+' testes'));
   process.exit(bad?1:0);

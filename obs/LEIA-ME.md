@@ -9,7 +9,7 @@ por cena, ou numa transmissão que nem tem placar.
 
 ```
 gerar.js            monta o pecas.html a partir do index.html
-pecas.html          as sete peças, escolhidas pelo endereço
+pecas.html          as oito peças, escolhidas pelo endereço
 levelbt-replay.lua  carrega o replay recém-salvo na Fonte de Mídia
 ```
 
@@ -34,7 +34,7 @@ E marque as duas caixas, que são o que faz a animação funcionar direito:
 Sem a segunda, a animação toca uma vez só e nunca mais. Com ela, toda vez
 que você corta para a cena a peça entra do zero.
 
-## As sete peças
+## As oito peças
 
 | `?peca=` | o que é | dura |
 |---|---|---|
@@ -45,6 +45,7 @@ que você corta para a cena a peça entra do zero.
 | `patrocinio` | cartão do patrocinador | fica |
 | `proximos` | resultados e próximos jogos | fica |
 | `fim` | tela de campeão com o placar dos sets | fica |
+| `stats` | as cinco estatísticas da partida, dupla contra dupla | fica |
 
 As que "ficam" permanecem no ar até você trocar de cena — quem controla o
 tempo é o OBS, não a página.
@@ -78,6 +79,28 @@ pecas.html?peca=proximos&torneio=COPA%20VERAO
   &jogados=|OITAVAS|Ju/Tom|Lia/Vitor|6-2 6-4
   &fila=19:00|FINAL|Ana/Bia|Cris/Dani|
 ```
+
+### Estatísticas
+
+Cada número entra como `dupla de cima,dupla de baixo`. As porcentagens
+são calculadas sozinhas a partir das frações:
+
+```
+pecas.html?peca=stats&a=Ana/Bia&b=Cris/Dani&torneio=COPA%20VERAO
+  &saque=24/32,18/29     pontos vencidos / jogados no saque
+  &devol=11/29,8/32      o mesmo, recebendo
+  &bp=2/5,1/3            break points convertidos / que teve
+  &seq=6,4               maior sequência de pontos seguidos
+  &q=3,2                 quarentões vencidos
+```
+
+**Sem valor, aparece traço.** As outras peças têm um exemplo pronto para
+você ver como ficam; esta não tem de propósito — um número de exemplo
+esquecido no endereço seria uma estatística inventada indo ao ar.
+
+Com o placar ao vivo rodando, você não precisa desta peça: o botão
+**ESTATÍSTICAS** da mesa de corte mostra a mesma cartela com os números
+calculados sozinhos. Ela existe para transmissão sem o placar do Level BT.
 
 ### Dois ajustes extras
 

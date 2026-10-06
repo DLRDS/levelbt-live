@@ -23,6 +23,18 @@
      preocupar, não para ficar na tela o jogo inteiro. */
   #syncMsg.sync-fora{color:var(--danger);font-weight:600;}
   #syncMsg.sync-voltou{color:#39D98A;font-weight:600;}
+
+  /* Estatísticas no controle: a mesma tabela da cartela, em tamanho de
+     painel. Rótulo no meio, uma dupla de cada lado. */
+  .stats .sh,.stats .sl{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;padding:9px 0;
+    border-bottom:1px solid var(--line);}
+  .stats .sh{font-weight:700;font-size:14px;}
+  .stats .sh .b,.stats .sl .v.b{text-align:right;}
+  .stats .sl .r{font-family:var(--fm);font-size:10px;letter-spacing:.14em;color:var(--label);text-align:center;}
+  .stats .sl .v{font-family:var(--fm);font-size:15px;}
+  .stats .sl .v small{color:var(--dim);margin:0 6px;}
+  .stats .sl .v.lid{color:var(--orange);}
+  .stats .base{font-family:var(--fm);font-size:11px;letter-spacing:.1em;color:var(--dim);margin-top:10px;line-height:1.5;}
   button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   input,select{font:inherit;color:inherit;}
 
@@ -521,6 +533,37 @@
   .spo .ft .wm b{color:var(--orange);font-weight:inherit;}
   .spo .ft .tn{font-family:var(--fm);font-size:24px;letter-spacing:.16em;color:var(--label);}
 
+  /* — ESTATÍSTICAS —
+     Mesmo esqueleto do PATROCÍNIO: véu escuro e um cartão no meio. Três
+     colunas por linha — dupla de cima, rótulo, dupla de baixo — porque é
+     assim que se lê um confronto: um contra o outro, olhando para o meio.
+     Quem está na frente naquela estatística fica laranja. */
+  .sta{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(13,13,13,.72);opacity:0;pointer-events:none;}
+  .sta.show{animation:fadeIn .45s ease forwards;}
+  .sta.hide{animation:fadeOut .35s ease forwards;}
+  .sta.show .box{animation:cartaoIn .55s cubic-bezier(.2,.8,.2,1) .1s both;}
+  .sta .box{background:var(--ink);padding:40px 48px;display:flex;flex-direction:column;gap:22px;width:1240px;}
+  .sta .hd{display:flex;align-items:center;gap:18px;min-width:0;}
+  .sta .hd .tag{background:var(--orange);color:var(--ink);padding:12px 22px;font-family:var(--fm);
+    font-size:26px;font-weight:700;letter-spacing:.2em;white-space:nowrap;}
+  .sta .hd .ctx{font-family:var(--fm);font-size:24px;letter-spacing:.16em;color:var(--label);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sta .duplas{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  .sta .duplas .du{font-family:var(--fd);font-size:46px;line-height:1;letter-spacing:-.04em;color:var(--white);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sta .duplas .du.b{text-align:right;}
+  .sta .ln{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px;
+    padding:15px 0;border-top:2px solid var(--line);}
+  .sta .rot{font-family:var(--fm);font-size:22px;letter-spacing:.18em;color:var(--label);text-align:center;white-space:nowrap;}
+  .sta .v{font-family:var(--fd);font-size:44px;line-height:1;letter-spacing:-.03em;color:var(--white);}
+  .sta .v.b{text-align:right;}
+  .sta .v small{font-family:var(--fm);font-size:22px;letter-spacing:.06em;color:var(--label);margin:0 12px;}
+  .sta .v.lid{color:var(--orange);}
+  .sta .ft{display:flex;align-items:center;gap:16px;}
+  .sta .ft .wm{font-family:var(--fd);font-size:24px;letter-spacing:-.03em;color:var(--white);}
+  .sta .ft .wm b{color:var(--orange);font-weight:inherit;}
+
   /* — FIM DE JOGO — */
   .veil{position:absolute;inset:0;background:rgba(13,13,13,.6);opacity:0;}
   .fim{position:absolute;left:64px;right:64px;top:140px;display:flex;flex-direction:column;gap:26px;opacity:0;}
@@ -634,6 +677,18 @@
         <div class="meter" style="height:26px;gap:4px"><i class="on" style="width:7px;height:11px"></i><i class="on" style="width:7px;height:17px"></i><i class="on" style="width:7px;height:22px"></i><i style="width:7px;height:26px"></i></div>
         <div class="wm">LEVEL<b>BT</b></div>
         <div class="tn" id="spoTorn"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sta" id="ovSta">
+    <div class="box">
+      <div class="hd"><div class="tag">ESTATÍSTICAS</div><div class="ctx" id="staCtx"></div></div>
+      <div class="duplas"><div class="du" id="staA">—</div><div class="du b" id="staB">—</div></div>
+      <div id="staLinhas"></div>
+      <div class="ft">
+        <div class="meter" style="height:26px;gap:4px"><i class="on" style="width:7px;height:11px"></i><i class="on" style="width:7px;height:17px"></i><i class="on" style="width:7px;height:22px"></i><i style="width:7px;height:26px"></i></div>
+        <div class="wm">LEVEL<b>BT</b></div>
       </div>
     </div>
   </div>
@@ -775,6 +830,11 @@
         </div>
       </details>
 
+      <details>
+        <summary>Estatísticas</summary>
+        <div class="stats" id="ctrlStats"></div>
+      </details>
+
     </div>
 
     <div class="cln area-mesa">
@@ -787,6 +847,7 @@
           <button class="cenab" data-c="cartela"><i class="tally"></i>CARTELA</button>
           <button class="cenab" data-c="agenda"><i class="tally"></i>PRÓXIMOS</button>
           <button class="cenab" data-c="patroc"><i class="tally"></i>PATROCÍNIO</button>
+          <button class="cenab" data-c="stats"><i class="tally"></i>ESTATÍSTICAS</button>
           <button class="cenab" data-c="oculto"><i class="tally"></i>OCULTAR<span class="tecla">O</span></button>
         </div>
         <button class="cenab disparo" id="btnReplay">VINHETA DE REPLAY<span class="tecla">R</span></button>
@@ -941,6 +1002,7 @@ function novaPartida(o){
     saque:0,          // 0..3 → índice do jogador
     status:'playing', vencedor:null,
     evento:null,      // selo momentâneo para o overlay
+    pontos:[],        // registro ponto a ponto — ver registrarPonto()
     v:0               // contador de versão (dispara animação)
   };
 }
@@ -963,6 +1025,7 @@ function precisaSets(m){ return m.nSets===1 ? 1 : 2; }
 function pontoPara(m,time){
   if(m.status!=='playing') return;
   empilhar(m);
+  registrarPonto(m,time);   // antes de aplicar: o placar que importa é o de ANTES
   m.evento=null;
 
   if(m.inTb){
@@ -1335,6 +1398,7 @@ function trocarJogo(m, jogo){
   m.p1=0; m.p2=0; m.g1=0; m.g2=0; m.s1=0; m.s2=0;
   m.setsFeitos=[]; m.inTb=false; m.tb1=0; m.tb2=0; m.superSet=false; m.tbAbriu=null;
   m.saque=0; m.status='playing'; m.vencedor=null; m.evento=null;
+  m.pontos=[];                   // estatística é da partida, não da quadra
   zerarTempo(m);                 // o relógio da transmissão não se mexe
   m.cena='placar'; m.cartela='';
   m.v++;
@@ -1382,6 +1446,139 @@ function oQueVale(m){
   if(a==='jogo'||b==='jogo') return 'VALE O JOGO';
   if(a==='set' ||b==='set' ) return 'VALE O SET';
   return 'QUEM FAZ, LEVA';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// REGISTRO PONTO A PONTO
+//
+// Cada ponto marcado pelos botões grandes vira uma linha em m.pontos:
+//
+//   { w:1, s:2, pl:'S1 3-2 30-40', bp:1, q:1 }
+//     w   quem venceu o ponto (dupla 1 ou 2)
+//     s   quem sacava — o JOGADOR, de 0 a 3, não só a dupla
+//     pl  o placar ANTES do ponto, legível por gente
+//     bp  só aparece se era break point
+//     q   só aparece se era quarentão
+//
+// POR QUE MORA DENTRO DA PARTIDA
+//   O DESFAZER guarda uma cópia inteira da partida a cada mudança. Com o
+//   registro lá dentro, desfazer o ponto apaga a linha dele SOZINHO — não
+//   existe código separado para manter os dois de acordo, então eles não
+//   têm como discordar.
+//
+// POR QUE AS CHAVES SÃO CURTAS
+//   A lista viaja ao banco a cada ponto e é copiada nas 200 cópias do
+//   DESFAZER. Uma partida longa tem ~250 pontos; a ~30 caracteres cada,
+//   são ~8 KB, e as cópias somam ~1 MB no pior caso, num limite de ~5 MB
+//   do navegador. Cabe com folga — desde que cada linha seja enxuta. Pelo
+//   mesmo motivo, bp e q nem são gravados quando são falsos.
+//
+// O QUE NÃO ENTRA
+//   Os botões de ajuste manual (+/−) mexem no placar sem dizer quem fez o
+//   ponto. Não há como registrar o que não se sabe, então eles não geram
+//   linha. O painel mostra "baseado em N pontos" para isso nunca ficar
+//   escondido.
+// ══════════════════════════════════════════════════════════════════
+
+// O placar como alguém leria em voz alta: "S2 3-2 30-40", "S1 TB 5-4",
+// "MTB 7-6". Sempre do ponto de vista da dupla de cima.
+function placarCurto(m){
+  if(m.inTb && m.superSet) return 'MTB '+m.tb1+'-'+m.tb2;
+  const set='S'+((m.setsFeitos||[]).length+1);
+  if(m.inTb) return set+' TB '+m.tb1+'-'+m.tb2;
+  const pt=n=>n>=4?'AD':PTS[n];
+  return set+' '+m.g1+'-'+m.g2+' '+pt(m.p1)+'-'+pt(m.p2);
+}
+
+// Break point: o ponto em que a dupla que RECEBE fecha o game se fizer.
+//
+// Convenção do tênis, seguida aqui: no tiebreak não existe break point.
+// Lá o saque troca a cada dois pontos, então "quebrar" deixa de ter
+// sentido.
+//
+// Consequência do quarentão: em 40-40 quem recebe fecha o game com um
+// ponto, então TODO quarentão é break point. Um game que vai de 30-40 a
+// 40-40 dá dois break points para quem recebe.
+function ehBreakPoint(m){
+  if(m.inTb || m.status!=='playing') return false;
+  const saca=saqueDoTime(m), recebe=saca===1?2:1;
+  const r = recebe===1?m.p1:m.p2, sv = saca===1?m.p1:m.p2;
+  if(m.ouro) return r>=3;                       // 40 de quem recebe já fecha
+  return (r===3 && sv<3) || r===4;              // com vantagem: 40 contra menos, ou AD
+}
+
+function registrarPonto(m,time){
+  if(time!==1 && time!==2) return;
+  if(!Array.isArray(m.pontos)) m.pontos=[];     // partida de antes desta versão
+  const r={w:time, s:m.saque, pl:placarCurto(m)};
+  if(ehBreakPoint(m)) r.bp=1;
+  if(ehQuarentao(m))  r.q=1;
+  m.pontos.push(r);
+}
+
+// ── As contas ─────────────────────────────────────────────────────
+// Uma função só, usada pelo controle E pelo overlay. Se as duas telas
+// fizessem a conta cada uma do seu jeito, um dia mostrariam números
+// diferentes para o mesmo jogo.
+//
+// Devolve, para cada dupla:
+//   saqueV/saqueJ   pontos vencidos / jogados sacando
+//   devolV/devolJ   pontos vencidos / jogados recebendo
+//   bpV/bpJ         break points convertidos / que teve (sempre recebendo)
+//   seq             maior sequência de pontos seguidos
+//   q               quarentões vencidos
+function estatisticas(m){
+  const pts=Array.isArray(m&&m.pontos)?m.pontos:[];
+  const zero=()=>({saqueV:0,saqueJ:0,devolV:0,devolJ:0,bpV:0,bpJ:0,seq:0,q:0});
+  const e={1:zero(), 2:zero(), total:0};
+  let quem=0, corrente=0;
+  for(const p of pts){
+    if(!p || (p.w!==1 && p.w!==2)) continue;    // linha estranha não derruba a conta
+    e.total++;
+    const saca=(p.s===0||p.s===1)?1:2, recebe=saca===1?2:1;
+    e[saca].saqueJ++;  e[recebe].devolJ++;
+    if(p.w===saca) e[saca].saqueV++; else e[recebe].devolV++;
+    if(p.bp){ e[recebe].bpJ++; if(p.w===recebe) e[recebe].bpV++; }
+    if(p.q) e[p.w].q++;
+    // a sequência atravessa games e sets: o que conta é a ordem dos pontos
+    if(p.w===quem) corrente++; else { quem=p.w; corrente=1; }
+    if(corrente>e[quem].seq) e[quem].seq=corrente;
+  }
+  return e;
+}
+
+// "24/32" e "75%". Sem ponto jogado ainda, traço — nunca "0%" falso.
+function fracao(v,j){ return j ? v+'/'+j : '—'; }
+function porcento(v,j){ return j ? Math.round(v/j*100)+'%' : ''; }
+
+// As cinco linhas, prontas para desenhar. "lid" diz quem está na frente
+// naquela estatística (1, 2 ou 0 se empatado ou sem dado), para a tela
+// poder destacar.
+function linhasEstat(e){
+  const pct=(v,j)=>j?v/j:-1;
+  // Só destaca quando os DOIS lados têm o dado. No começo do jogo uma
+  // dupla ainda nem sacou, e pintar a outra de "líder" seria enganoso.
+  const quemLidera=(a,b)=>(a<0||b<0||a===b) ? 0 : (a>b?1:2);
+  const A=e[1], B=e[2];
+  return [
+    {rot:'PONTOS NO SAQUE',
+     a:fracao(A.saqueV,A.saqueJ), pa:porcento(A.saqueV,A.saqueJ),
+     b:fracao(B.saqueV,B.saqueJ), pb:porcento(B.saqueV,B.saqueJ),
+     lid:quemLidera(pct(A.saqueV,A.saqueJ),pct(B.saqueV,B.saqueJ))},
+    {rot:'PONTOS NA DEVOLUÇÃO',
+     a:fracao(A.devolV,A.devolJ), pa:porcento(A.devolV,A.devolJ),
+     b:fracao(B.devolV,B.devolJ), pb:porcento(B.devolV,B.devolJ),
+     lid:quemLidera(pct(A.devolV,A.devolJ),pct(B.devolV,B.devolJ))},
+    {rot:'BREAK POINTS',
+     a:fracao(A.bpV,A.bpJ), pa:'', b:fracao(B.bpV,B.bpJ), pb:'',
+     lid:quemLidera(A.bpV,B.bpV)},          // quem converteu mais
+    {rot:'MAIOR SEQUÊNCIA',
+     a:String(A.seq), pa:'', b:String(B.seq), pb:'',
+     lid:quemLidera(A.seq,B.seq)},
+    {rot:'QUARENTÕES VENCIDOS',
+     a:String(A.q), pa:'', b:String(B.q), pb:'',
+     lid:quemLidera(A.q,B.q)}
+  ];
 }
 
 function tensao(m){
@@ -1877,11 +2074,11 @@ function pintarOverlay(m){
   const cena=m.cena||'placar';
   if(cena!==identAtual){
     identAtual=cena;
-    const ident=$('ovIdent'), br=$('ovBrandTR'), spo=$('ovSpo'), agd=$('ovAgd');
+    const ident=$('ovIdent'), br=$('ovBrandTR'), spo=$('ovSpo'), agd=$('ovAgd'), sta=$('ovSta');
     const fora=el=>{ el.classList.remove('show'); el.classList.add('hide'); };
 
     // recolhe tudo antes de montar a cena nova
-    fora(ident); fora(spo); fora(agd); br.classList.add('hidden');
+    fora(ident); fora(spo); fora(agd); fora(sta); br.classList.add('hidden');
 
     if(cena==='cartela'){
       $('idTorn').textContent=(m.torneio||'LEVEL BT').toUpperCase();
@@ -1903,8 +2100,13 @@ function pintarOverlay(m){
     } else if(cena==='agenda'){
       montarAgenda(m);
       agd.classList.remove('hide'); anima(agd,'show');
+    } else if(cena==='stats'){
+      montarStats(m);
+      sta.classList.remove('hide'); anima(sta,'show');
     }
   }
+  // Como a agenda: com a cartela no ar, cada ponto atualiza os números.
+  if(cena==='stats') montarStats(m);
   // A arte de intervalo se redesenha a cada atualização, não só ao entrar:
   // assim mexer na fila de jogos aparece na hora, com ela já no ar.
   if(cena==='agenda') montarAgenda(m);
@@ -1912,7 +2114,7 @@ function pintarOverlay(m){
   // o placar some nas cenas que ocupam a tela
   // durante o replay o placar sai: ele mostraria o estado de agora sobre
   // uma imagem de segundos atrás
-  const escondeBug = emReplay || cena==='oculto'||cena==='cartela'||cena==='agenda'||cena==='patroc';
+  const escondeBug = emReplay || cena==='oculto'||cena==='cartela'||cena==='agenda'||cena==='patroc'||cena==='stats';
   const fora = escondeBug || m.status==='finished';
   $('bug').classList.toggle('out', fora);
   // por classe, não por style.opacity: a animação com fill-mode ganha do estilo inline
@@ -1951,6 +2153,20 @@ function pintarOverlay(m){
   ultimoV=m.v; ultimoM=m;
 }
 function anima(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+// A cartela de estatísticas. A conta é a mesma do controle — estatisticas()
+// — então o que o operador vê no painel é exatamente o que vai ao ar.
+function montarStats(m){
+  $('staCtx').textContent=[m.torneio,m.cat,m.fase].filter(Boolean).join(' · ').toUpperCase();
+  $('staA').textContent=nome(m.t1||[]);
+  $('staB').textContent=nome(m.t2||[]);
+  $('staLinhas').innerHTML=linhasEstat(estatisticas(m)).map(l=>
+    '<div class="ln">'+
+      '<div class="v a'+(l.lid===1?' lid':'')+'">'+esc(l.a)+(l.pa?'<small>'+esc(l.pa)+'</small>':'')+'</div>'+
+      '<div class="rot">'+esc(l.rot)+'</div>'+
+      '<div class="v b'+(l.lid===2?' lid':'')+'">'+(l.pb?'<small>'+esc(l.pb)+'</small>':'')+esc(l.b)+'</div>'+
+    '</div>').join('');
+}
 
 // A cortina varre a tela uma vez e sai. Serve para cobrir o corte do
 // vídeo para o replay — não fica em loop.
@@ -2367,6 +2583,7 @@ function tirarDaFila(i){
 
 function pintarControle(){
   const m=M;
+  pintarStats(m);
   pintarAgendaLista(m.agenda);
   pintarPatrocinios(m.patrocinios);
   pintarPreview();
@@ -2432,6 +2649,25 @@ function pintarControle(){
   // classe e eram apagados por este laço
   document.querySelectorAll('#cenas .cenab').forEach(b=>b.classList.toggle('on',b.dataset.c===cena));
 }
+// A gaveta de estatísticas do controle. Diz sempre em quantos pontos se
+// baseia: os ajustes manuais não entram, e o operador precisa saber disso
+// antes de pôr a cartela no ar.
+function pintarStats(m){
+  const el=$('ctrlStats'); if(!el||!m) return;
+  const e=estatisticas(m);
+  const cab='<div class="sh"><div>'+esc(nome(m.t1||[]))+'</div><div></div><div class="b">'+esc(nome(m.t2||[]))+'</div></div>';
+  const linhas=linhasEstat(e).map(l=>
+    '<div class="sl">'+
+      '<div class="v'+(l.lid===1?' lid':'')+'">'+esc(l.a)+(l.pa?'<small>'+esc(l.pa)+'</small>':'')+'</div>'+
+      '<div class="r">'+esc(l.rot)+'</div>'+
+      '<div class="v b'+(l.lid===2?' lid':'')+'">'+(l.pb?'<small>'+esc(l.pb)+'</small>':'')+esc(l.b)+'</div>'+
+    '</div>').join('');
+  const base = e.total
+    ? 'BASEADO EM '+e.total+(e.total===1?' PONTO MARCADO':' PONTOS MARCADOS')+'. AJUSTES MANUAIS NÃO ENTRAM.'
+    : 'NENHUM PONTO MARCADO AINDA. OS AJUSTES MANUAIS NÃO ENTRAM NA CONTA.';
+  el.innerHTML=cab+linhas+'<div class="base">'+base+'</div>';
+}
+
 function esc(s){ return String(s??'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // ajuste manual: mexe direto no placar, sem passar pelas regras

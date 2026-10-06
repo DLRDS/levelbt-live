@@ -79,7 +79,8 @@ const PECAS={
   proximos : {el:'ovAgd',   dur:0},
   fim      : {el:'ovFim',   dur:0, extra:['ovVeil']},
   selo     : {el:'ovTens',  dur:0},
-  quebrou  : {el:'ovBrk',   dur:0}
+  quebrou  : {el:'ovBrk',   dur:0},
+  stats    : {el:'ovSta',   dur:0}
 };
 
 // Apaga tudo que não é a peça pedida. O palco inteiro vem do overlay,
@@ -134,6 +135,44 @@ function preencher(){
   if($('fS1')) $('fS1').innerHTML=caixas(0);
   if($('fS2')) $('fS2').innerHTML=caixas(1);
   if($('fFt')) $('fFt').innerHTML=p('rodape','') ? '<span>'+p('rodape','').toUpperCase()+'</span>' : '';
+
+  // ── estatísticas ──
+  // Cada número entra como "dupla de cima,dupla de baixo":
+  //   saque=24/32,18/29  devol=11/29,8/32  bp=2/5,1/3  seq=6,4  q=3,2
+  //
+  // SEM VALOR, TRAÇO. Diferente das outras peças, esta não tem exemplo
+  // pronto: um número de mentira aqui seria uma estatística inventada
+  // indo ao ar se alguém esquecer de preencher o endereço.
+  txt('staCtx', [p('torneio',''),p('cat',''),p('fase','')].filter(Boolean).join(' · ').toUpperCase());
+  txt('staA', p('a','—'));
+  txt('staB', p('b','—'));
+  // o endereço vira HTML aqui: escapa antes, para um "<" não virar marcação
+  const esc=t=>String(t).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+  const par=(nome)=>{ const v=p(nome,''); const x=v.split(',').map(y=>esc(y.trim()));
+                      return [x[0]||'—', x[1]||'—']; };
+  const razao=(f)=>{ const n=String(f).split('/').map(Number);
+                     return n.length===2 && n[1]>0 ? n[0]/n[1] : -1; };
+  const num=(f)=>{ const n=parseFloat(String(f).split('/')[0]); return isNaN(n)?-1:n; };
+  const pct=(f)=>{ const r=razao(f); return r<0 ? '' : Math.round(r*100)+'%'; };
+  // Mesma regra do overlay ao vivo: só destaca com dado dos DOIS lados.
+  const lider=(a,b)=>(a<0||b<0||a===b) ? 0 : (a>b?1:2);
+  const linhas=[
+    ['PONTOS NO SAQUE',     par('saque'), 'pct'],
+    ['PONTOS NA DEVOLUÇÃO', par('devol'), 'pct'],
+    ['BREAK POINTS',        par('bp'),    'conv'],
+    ['MAIOR SEQUÊNCIA',     par('seq'),   'num'],
+    ['QUARENTÕES VENCIDOS', par('q'),     'num']
+  ];
+  if($('staLinhas')) $('staLinhas').innerHTML=linhas.map(([rot,[a,b],tipo])=>{
+    const va = tipo==='pct' ? razao(a) : num(a);
+    const vb = tipo==='pct' ? razao(b) : num(b);
+    const l = lider(va,vb);
+    const pa = tipo==='pct' ? pct(a) : '', pb = tipo==='pct' ? pct(b) : '';
+    return '<div class="ln">'+
+      '<div class="v a'+(l===1?' lid':'')+'">'+a+(pa?'<small>'+pa+'</small>':'')+'</div>'+
+      '<div class="rot">'+rot+'</div>'+
+      '<div class="v b'+(l===2?' lid':'')+'">'+(pb?'<small>'+pb+'</small>':'')+b+'</div></div>';
+  }).join('');
 
   // ── próximos jogos ──
   txt('agdTorn', [p('torneio',''),p('quadra','')].filter(Boolean).join(' · ').toUpperCase());

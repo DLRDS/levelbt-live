@@ -186,3 +186,33 @@ Medido no projeto de verdade, pelo navegador: a campainha chega em **20 a
 90 ms**, a leitura do banco leva **~130 ms**. O ponto aparece na tela em
 cerca de 0,2 s, contra até 0,9 s antes — e as perguntas ao banco caem de
 ~4.000 para ~720 por hora de transmissão.
+
+### Estatísticas
+
+Cada ponto marcado pelos botões grandes vira uma linha de registro:
+quem venceu, quem sacava, o placar antes do ponto, e se era break point
+ou quarentão. Daí saem cinco números, na gaveta **Estatísticas** do
+controle e na cartela **ESTATÍSTICAS** da mesa de corte:
+
+| estatística | o que conta |
+|---|---|
+| pontos no saque | vencidos pela dupla que sacava · `24/32 75%` |
+| pontos na devolução | vencidos pela dupla que recebia |
+| break points | pontos em que quem recebe fecha o game se fizer · `2/5` |
+| maior sequência | mais pontos seguidos, atravessando games e sets |
+| quarentões vencidos | pontos jogados em 40-40 |
+
+Duas convenções que valem saber:
+
+- **Todo quarentão é break point.** Em 40-40 quem recebe fecha o game com
+  um ponto. Um game que vai de 30-40 a 40-40 dá dois break points.
+- **No tiebreak não há break point nem quarentão** — é a convenção do
+  tênis. Mas os pontos do tiebreak contam no saque e na devolução.
+
+**Os ajustes manuais (+/−) não entram.** Eles mudam o placar sem dizer
+quem fez o ponto. A gaveta sempre mostra em quantos pontos a conta se
+baseia, para isso nunca ficar escondido. Desfazer um ponto apaga a linha
+dele junto.
+
+Com a cartela no ar o placar sai, como nas outras cartelas que ocupam a
+tela. É feita para intervalo e troca de lado.
