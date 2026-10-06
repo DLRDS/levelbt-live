@@ -16,6 +16,12 @@
     --fd:'Archivo Black',sans-serif; --fb:'Archivo',sans-serif; --fm:'JetBrains Mono',monospace;
   }
   body{font-family:var(--fb);background:var(--ink);color:var(--white);font-size:16px;-webkit-font-smoothing:antialiased;}
+
+  /* Aviso de sincronia. Fora do ar é vermelho e fica; o "voltou" é verde
+     e some em 6s — ele existe para o operador poder parar de se
+     preocupar, não para ficar na tela o jogo inteiro. */
+  #syncMsg.sync-fora{color:var(--danger);font-weight:600;}
+  #syncMsg.sync-voltou{color:#39D98A;font-weight:600;}
   button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   input,select{font:inherit;color:inherit;}
 

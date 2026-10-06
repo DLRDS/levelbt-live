@@ -689,7 +689,7 @@ t('avisa quando nenhuma fonte foi escolhida',
   ()=>lua.includes('nenhuma Fonte de Midia escolhida'));
 t('avisa quando o Replay Buffer está desligado',
   ()=>lua.includes('Replay Buffer nao existe')
-    && lua.includes('nenhum replay salvo ainda'));
+    && lua.includes("nao esta ") && lua.includes("obs_output_active"));
 t('tem botão de conferência, para testar sem a coreografia',
   ()=>lua.includes('obs_properties_add_button')
     && lua.includes('botao_agora'));
@@ -819,6 +819,241 @@ const wErr=new JSDOM(pecasHtml,{runScripts:'dangerously',pretendToBeVisual:true,
 await new Promise(r5=>setTimeout(r5,120));
 t('peça desconhecida avisa em vez de ficar preta',
   ()=>wErr.document.body.textContent.includes('Peça desconhecida'));
+
+
+// ══════════════════════════════════════════════════════════════════
+// SINCRONIA · FILA, REENVIO E DESFAZER PERSISTENTE
+//
+// Aqui o banco de mentira imita o banco-v2.sql DE VERDADE, inclusive a
+// recusa por número de ordem antigo. Se a regra do SQL e a do navegador
+// discordarem, é aqui que aparece.
+// ══════════════════════════════════════════════════════════════════
+console.log('\n── SINCRONIA ──');
+
+function bancoFalso(){
+  const linhas={};
+  const b={
+    linhas, escritas:[], tentativas:[], atrasarWrite:null,
+    rpc: async (fn,a)=>{
+      if(fn==='bc_create'){
+        linhas['tk1']={ck:'ck1',payload:{}};
+        return {data:[{token:'tk1',control_key:'ck1'}],error:null};
+      }
+      if(fn==='bc_write'){
+        b.tentativas.push(JSON.parse(JSON.stringify(a.p_payload)));
+        if(b.atrasarWrite) return b.atrasarWrite(a);
+        return b.gravar(a);
+      }
+      if(fn==='bc_read'){
+        const l=linhas[a.p_token];
+        return {data:l?JSON.parse(JSON.stringify(l.payload)):null,error:null};
+      }
+      return {data:null,error:null};
+    },
+    // a mesma regra do banco-v2.sql, em JavaScript
+    gravar: (a)=>{
+      b.escritas.push(JSON.parse(JSON.stringify(a.p_payload)));
+      const l=Object.values(linhas).find(x=>x.ck===a.p_control_key);
+      if(!l) return {data:{ok:false,motivo:'chave'},error:null};
+      const novoV  = typeof a.p_payload.v==='number' ? a.p_payload.v : null;
+      const velhoV = typeof l.payload.v==='number'   ? l.payload.v   : null;
+      if(novoV!==null && velhoV!==null && novoV<=velhoV)
+        return {data:{ok:false,motivo:'antigo',v:velhoV},error:null};
+      l.payload=JSON.parse(JSON.stringify(a.p_payload));
+      return {data:{ok:true,motivo:'gravado',v:novoV},error:null};
+    }
+  };
+  return b;
+}
+
+// localStorage que dá para compartilhar entre duas janelas — é assim que
+// se simula "o operador recarregou a página".
+function armazemFalso(){
+  const m=new Map();
+  return {getItem:k=>m.has(k)?m.get(k):null,
+          setItem:(k,v)=>m.set(k,String(v)),
+          removeItem:k=>m.delete(k), clear:()=>m.clear(), _mapa:m};
+}
+
+function abrirPainel(banco, armazem){
+  return new JSDOM(html,{runScripts:'dangerously',url:'https://x/index.html',
+    pretendToBeVisual:true,beforeParse(w){
+      if(armazem) Object.defineProperty(w,'localStorage',{value:armazem,configurable:true});
+      w.innerWidth=1440; w.innerHeight=900; w.scrollTo=()=>{}; w.confirm=()=>true;
+      w.matchMedia=()=>({matches:true,addListener(){},removeListener(){}});
+      w.supabase={createClient:()=>({ rpc:banco.rpc,
+        storage:{from:()=>({upload:async()=>({error:null}),
+          getPublicUrl:()=>({data:{publicUrl:'https://x/l.png'}})})}})};
+    }}).window;
+}
+
+async function painelComJogo(banco, armazem){
+  const w=abrirPainel(banco, armazem);
+  await new Promise(r=>setTimeout(r,700));
+  w.document.getElementById('a1').value='Ana';
+  w.document.getElementById('b1').value='Cris';
+  await w.iniciar();
+  await new Promise(r=>setTimeout(r,60));
+  return w;
+}
+
+// ── A fila: um envio de cada vez, e o do meio morre ───────────────
+{
+  const banco=bancoFalso();
+  const w=await painelComJogo(banco);
+  banco.escritas.length=0; banco.tentativas.length=0;
+
+  // segura o próximo envio no ar, como uma internet lenta faria
+  let soltar=null;
+  banco.atrasarWrite=(a)=>new Promise(res=>{ soltar=()=>{ banco.atrasarWrite=null; res(banco.gravar(a)); }; });
+
+  w.setCena('agenda');          // dispara o envio que vai ficar pendurado
+  await new Promise(r=>setTimeout(r,20));
+  w.setCena('patroc');          // estes três acontecem com o anterior no ar
+  w.setCena('oculto');
+  w.setCena('placar');
+  await new Promise(r=>setTimeout(r,20));
+
+  t('com um envio no ar, os seguintes não saem atropelando',
+    ()=>banco.tentativas.length===1);
+
+  soltar();
+  await new Promise(r=>setTimeout(r,60));
+
+  t('ao liberar, sai UM envio só com os três de uma vez',
+    ()=>banco.tentativas.length===2);
+  t('e o que saiu é o estado mais recente, não o do meio',
+    ()=>banco.tentativas[1].cena==='placar');
+  t('o banco ficou com o placar certo',
+    ()=>banco.linhas['tk1'].payload.cena==='placar');
+}
+
+// ── Reenvio com espera crescente ──────────────────────────────────
+{
+  const banco=bancoFalso();
+  const w=await painelComJogo(banco);
+  const msg=()=>w.document.getElementById('syncMsg');
+
+  let quedas=0;
+  banco.atrasarWrite=(a)=>{ quedas++; if(quedas<=1) throw new Error('sem internet');
+                            banco.atrasarWrite=null; return banco.gravar(a); };
+  w.setCena('agenda');
+  await new Promise(r=>setTimeout(r,60));
+
+  t('a queda aparece na tela, com o número da tentativa',
+    ()=>/tentando de novo \(1ª vez\)/.test(msg().textContent));
+  t('e o aviso fica em vermelho', ()=>msg().classList.contains('sync-fora'));
+
+  // enquanto está fora, o operador segue marcando
+  w.setCena('placar');
+  await new Promise(r=>setTimeout(r,1300));   // a 1ª espera é de 1s
+
+  t('ele tentou de novo sozinho, sem ninguém mandar',
+    ()=>banco.escritas.length>=2);
+  t('e o que foi gravado é o placar de AGORA, não o que falhou',
+    ()=>banco.linhas['tk1'].payload.cena==='placar');
+  t('quando volta, avisa que voltou',
+    ()=>/Sincronizado de novo/.test(msg().textContent)
+      && msg().classList.contains('sync-voltou'));
+}
+
+// ── Recusa por ordem não é alarme; chave errada é ─────────────────
+{
+  const banco=bancoFalso();
+  const w=await painelComJogo(banco);
+  const msg=()=>w.document.getElementById('syncMsg');
+
+  banco.atrasarWrite=()=>({data:{ok:false,motivo:'antigo',v:999},error:null});
+  w.setCena('agenda');
+  await new Promise(r=>setTimeout(r,60));
+  t('recusa por mensagem atrasada não assusta o operador',
+    ()=>!msg().classList.contains('sync-fora')
+      && /Sincronizado/.test(msg().textContent));
+
+  banco.atrasarWrite=()=>({data:{ok:false,motivo:'chave'},error:null});
+  w.setCena('placar');
+  await new Promise(r=>setTimeout(r,60));
+  t('chave de controle errada, essa sim, aparece em vermelho',
+    ()=>msg().classList.contains('sync-fora')
+      && /Chave de controle/.test(msg().textContent));
+}
+
+// ── O número de ordem nunca anda para trás ────────────────────────
+{
+  const banco=bancoFalso();
+  const w=await painelComJogo(banco);
+
+  w.document.getElementById('tap1').click();
+  await new Promise(r=>setTimeout(r,40));
+  w.document.getElementById('tap1').click();
+  await new Promise(r=>setTimeout(r,40));
+  const vAntes=banco.linhas['tk1'].payload.v;
+
+  w.document.getElementById('btnUndo').click();
+  await new Promise(r=>setTimeout(r,60));
+
+  // Este é o teste que importa: o desfazer restaura um placar ANTIGO, de
+  // v menor. Se ele devolvesse o v antigo, o banco recusaria a correção
+  // como "mensagem atrasada" e o OBS ficaria com o ponto errado na tela.
+  t('desfazer chega ao banco em vez de ser recusado como atrasado',
+    ()=>banco.linhas['tk1'].payload.v > vAntes);
+  t('e o placar realmente voltou um ponto',
+    ()=>banco.linhas['tk1'].payload.p1===1);
+}
+
+// ── O DESFAZER sobrevive ao recarregar ────────────────────────────
+{
+  const banco=bancoFalso(), armazem=armazemFalso();
+  const w1=await painelComJogo(banco, armazem);
+  w1.pontoPara(w1.partidaAtual(),1); w1.publicar();
+  w1.pontoPara(w1.partidaAtual(),2); w1.publicar();
+  await new Promise(r=>setTimeout(r,60));
+
+  t('a pilha de desfazer foi gravada no aparelho',
+    ()=>JSON.parse(armazem.getItem('lbt_hist_tk1')||'[]').length===2);
+
+  // o operador recarrega a página
+  const w2=abrirPainel(banco, armazem);
+  await new Promise(r=>setTimeout(r,700));
+  const voltou=await w2.tentarRetomar();
+  await new Promise(r=>setTimeout(r,40));
+
+  t('a partida volta depois do F5', ()=>voltou===true);
+  t('e o DESFAZER volta habilitado junto',
+    ()=>w2.document.getElementById('btnUndo').disabled===false);
+
+  w2.document.getElementById('btnUndo').click();
+  await new Promise(r=>setTimeout(r,60));
+  t('e desfaz de verdade o ponto de antes do F5',
+    ()=>banco.linhas['tk1'].payload.p2===0 && banco.linhas['tk1'].payload.p1===1);
+
+  // jogo novo começa sem desfazer do jogo anterior
+  w2.esquecerHist();
+  t('jogo novo pela fila limpa a pilha, também no aparelho',
+    ()=>armazem.getItem('lbt_hist_tk1')===null);
+}
+
+// ── Duas quadras no mesmo celular não se misturam ─────────────────
+t('a pilha é chaveada pelo token da transmissão',
+  ()=>/const HIST_LS='lbt_hist_'/.test(html)
+    && /return tokenPub \? HIST_LS\+tokenPub : null/.test(html));
+t('e tem teto, para não encher a memória do celular',
+  ()=>/const HIST_MAX=200/.test(html) && /hist\.slice\(-HIST_MAX\)/.test(html));
+
+// ── O SQL novo existe e não mexe no antigo ────────────────────────
+const sqlV2=fs.readFileSync(path.join(__dirname,'..','banco-v2.sql'),'utf8');
+t('banco-v2.sql derruba a função antes, porque o tipo de retorno mudou',
+  ()=>/drop function if exists bc_write\(text, jsonb\)/.test(sqlV2));
+t('e compara o número de ordem antes de gravar',
+  ()=>/v_novo <= v_velho/.test(sqlV2) && /'motivo', 'antigo'/.test(sqlV2));
+t('payload sem número de ordem continua passando (primeira gravação)',
+  ()=>/v_novo is not null and v_velho is not null/.test(sqlV2));
+t('e segura a linha para dois envios simultâneos não se atropelarem',
+  ()=>/for update/.test(sqlV2));
+const sqlV1=fs.readFileSync(path.join(__dirname,'..','banco.sql'),'utf8');
+t('o banco.sql original ficou intocado',
+  ()=>sqlV1.includes('returns boolean') && !sqlV1.includes('v_velho'));
+
 
 console.log('\n'+(bad? '✗ '+bad+' FALHA(S) · '+ok+' ok' : '✓ TUDO OK · '+ok+' testes'));
   process.exit(bad?1:0);
