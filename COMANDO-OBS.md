@@ -92,6 +92,21 @@ quantos segundos: 5, 10 ou 15. O botão muda de *VINHETA DE REPLAY* para
 > ou ele toca e congela, ou — se *Repetir* estiver marcado na Fonte de
 > Mídia — toca três vezes seguidas.
 
+### Se a imagem ao vivo rebobinar ao voltar
+
+Acontece quando a cena ao vivo é um **arquivo de vídeo**, não uma câmera.
+Toda Fonte de Mídia nasce com *Reiniciar a reprodução quando a fonte ficar
+ativa* marcado, então voltar para a cena faz o vídeo começar do zero.
+
+Na fonte da **cena ao vivo**, desmarque *Reiniciar a reprodução quando a
+fonte ficar ativa* e *Fechar arquivo quando inativo*. O vídeo segue
+rolando por baixo durante o replay e você volta no ponto certo.
+
+Na fonte da **cena do replay** é o oposto: ali *Reiniciar* fica marcado,
+senão o clipe não toca do começo.
+
+Com câmera o problema não existe — câmera não rebobina.
+
 ### O que o replay mostra
 
 O Replay Buffer grava a **saída do programa**: o que foi ao ar. Então ele

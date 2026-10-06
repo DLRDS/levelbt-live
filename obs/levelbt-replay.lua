@@ -110,6 +110,10 @@ local function ultimo_replay()
                 "repeticao', aplique, e ligue o buffer na janela principal."
   end
 
+  -- Habilitado nas Configuracoes e RODANDO sao coisas diferentes, e as
+  -- duas davam a mesma mensagem aqui. Separar isto economiza uma rodada.
+  local rodando = obs.obs_output_active(buffer)
+
   local cd = obs.calldata_create()
   local ph = obs.obs_output_get_proc_handler(buffer)
   obs.proc_handler_call(ph, "get_last_replay", cd)
@@ -118,8 +122,16 @@ local function ultimo_replay()
   obs.obs_output_release(buffer)
 
   if caminho == nil or caminho == "" then
-    return nil, "o buffer nao tem nenhum replay salvo ainda. Ele esta " ..
-                "LIGADO? (botao 'Iniciar buffer de repeticao')"
+    if not rodando then
+      return nil, "o buffer esta HABILITADO nas Configuracoes mas nao esta " ..
+                  "RODANDO. Sao duas coisas. Na janela principal, no painel " ..
+                  "'Controles' (canto inferior direito), clique em 'Iniciar " ..
+                  "buffer de repeticao'. Se esse botao nao aparece: menu " ..
+                  "Exibir -> Docas -> marque 'Controles'."
+    end
+    return nil, "o buffer esta rodando, mas nenhum replay foi salvo ainda " ..
+                "nesta sessao. Clique em 'Salvar replay' no painel Controles " ..
+                "e tente de novo."
   end
   return caminho, nil
 end
